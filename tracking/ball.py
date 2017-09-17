@@ -5,15 +5,17 @@ import cv2
 
 class Ball:
     """
-    The postition of the ball, and methods to get it
+    The position of the ball, and methods to get it
     The theoricall falling point of the ball and methods to get it
     """
 
-    postitions = []
+    positions = []
+    MAX_GET_POS_RETRIES = 10
 
     _video_source = None
     _video_capture = None
     _color_range = ((-1, -1, -1), (-1, -1, -1))
+    _last_frame = (None, None)
 
     def __init__(self, video_source, color_range):
         """
@@ -27,19 +29,96 @@ class Ball:
 
     def start_positionning(self):
         """
-        Start the video capture or the reading of the video
+        Start the video capture or the reading of the video and reads the first
+        frame
         """
+
+        if self._last_frame != (None, None):
+            raise ValueError("Positionning has already started !")
+
         self._video_capture = cv2.VideoCapture(self._video_source)
+        self._last_frame = self._video_capture.read()
+
+    def stop_positionning(self):
+        """
+        Ends positionning and cuts the video feed
+        """
+        self._video_capture.release()
+        cv2.destroyAllWindows()
+
+    @property
+    def position(self):
+        pos = self._get_new_position()
+        retries = 0
+
+        while pos == (-1, -1) and retries <= self.MAX_GET_POS_RETRIES:
+            pos = self._get_new_position
+            retries += 1
+
+        if retries > self.MAX_GET_POS_RETRIES:
+            raise ValueError("Tracking failed")
+
+        self.positions.append(pos)
+
+        return pos
+
 
     def _get_new_position(self):
         """
         Read a new image and determines (x,y) and return it
+        If no position is found, returns (-1, -1)
         """
+
+        position = (-1, -1)
 
         if not self._video_capture or not self._video_capture.isOpened():
             raise ValueError('There is no opened video capture')
 
         ret, frame = self._video_capture.read()
+
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Filter only the black pixels
+        mask = cv2.inRange(rgb, self.color_range[0], self.color_range[1])
+        mask = cv2.erode(mask, None, iterations=2)
+
+        # find contours in the mask and initialize the current
+        # (x, y) center of the ball
+        cnts = cv2.findContours(
+            mask.copy(),
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )[-2]
+
+        if len(cnts) > 0:
+            # find the largest contour in the mask, then use
+            # it to compute the minimum enclosing circle and
+            # centroid
+            c = max(cnts, key=cv2.contourArea)
+            ((x, y), radius) = cv2.minEnclosingCircle(c)
+            M = cv2.moments(c)
+
+            if M["m00"] != 0 and M["m00"] != 0:
+                position = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+
+            if radius > 1:
+                # draw the circle and centroid on the frame,
+                # then update the list of tracked points
+                cv2.circle(frame, (int(x), int(y)), int(radius),
+                           (0, 255, 255), 2)
+                cv2.circle(frame, position, 5, (0, 0, 255), -1)
+
+                # Add the center to the drawing
+                try:
+                    cv2.circle(drawing, position, 2, (0, 255, 0), -1)
+                except:
+                    print('OUCH')
+                    pass
+
+            cv2.imshow('frame', frame)
+
+        return position
+
 
 
 def track():
