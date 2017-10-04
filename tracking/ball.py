@@ -16,15 +16,18 @@ class Ball:
     _video_capture = None
     _color_range = ((-1, -1, -1), (-1, -1, -1))
     _last_frame = (None, None)
+    _window = {'width': -1, 'height': -1}
 
-    def __init__(self, video_source, color_range):
+    def __init__(self, video_source, color_range, dimensions):
         """
         Params:
-            - video_source : opencv video source (camera of file)
+            - video_source : opencv video source (camera or file)
             - color_range : tuple of two colors (who are 3-uples)
                 ex : ((0,0,0), (0, 0, 50))
+            - dimentions : 'real' height and width of the window in meters
         """
         self._video_source = video_source
+        self._dimensions = dimensions
         self.color_range = color_range
 
     def start_positionning(self):
@@ -37,7 +40,12 @@ class Ball:
             raise ValueError("Positionning has already started !")
 
         self._video_capture = cv2.VideoCapture(self._video_source)
-        self._last_frame = self._video_capture.read()
+        ret, self._last_frame = self._video_capture.read()
+
+        self._window['height'] = len(self._last_frame)
+        self._window['width'] = len(self._last_frame[0])
+
+        print(self._window)
 
     def stop_positionning(self):
         """
@@ -47,12 +55,32 @@ class Ball:
         cv2.destroyAllWindows()
 
     @property
+    def is_in_range(self):
+        """
+        Returns if the camera (and the softare detected the ball)
+        """
+
+        current_pos = self._get_new_position()
+        self.positions.append(current_pos)
+
+        if current_pos[0] == -1 and current_pos[1] == -1:
+            return False
+
+        return True
+
+    @property
     def position(self):
+        """
+        Returns the position of the ball, always returns a position
+        If no position is found, raises an error
+        Best practice is to call is_in_range before
+        """
+
         pos = self._get_new_position()
         retries = 0
 
-        while pos == (-1, -1) and retries <= self.MAX_GET_POS_RETRIES:
-            pos = self._get_new_position
+        while pos[0] == -1 and pos[1] == -1 and retries <= self.MAX_GET_POS_RETRIES:
+            pos = self._get_new_position()
             retries += 1
 
         if retries > self.MAX_GET_POS_RETRIES:
@@ -69,12 +97,14 @@ class Ball:
         If no position is found, returns (-1, -1)
         """
 
-        position = (-1, -1)
-
         if not self._video_capture or not self._video_capture.isOpened():
             raise ValueError('There is no opened video capture')
 
         ret, frame = self._video_capture.read()
+        self._last_frame = frame
+
+        t_grabed = clock()
+        pos = (-1, -1, t_grabed)
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
@@ -97,27 +127,32 @@ class Ball:
             c = max(cnts, key=cv2.contourArea)
             ((x, y), radius) = cv2.minEnclosingCircle(c)
             M = cv2.moments(c)
+            center = None
 
             if M["m00"] != 0 and M["m00"] != 0:
-                position = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+                center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+            else:
+                return (-1, -1, t_grabed)
 
             if radius > 1:
                 # draw the circle and centroid on the frame,
                 # then update the list of tracked points
                 cv2.circle(frame, (int(x), int(y)), int(radius),
                            (0, 255, 255), 2)
-                cv2.circle(frame, position, 5, (0, 0, 255), -1)
+                cv2.circle(frame, center, 5, (0, 0, 255), -1)
 
                 # Add the center to the drawing
                 try:
-                    cv2.circle(drawing, position, 2, (0, 255, 0), -1)
+                    cv2.circle(frame, center, 2, (0, 255, 0), -1)
                 except:
                     print('OUCH')
                     pass
 
-            cv2.imshow('frame', frame)
+            pos = (center[0], self._window['height'] - center[1], clock())
 
-        return position
+        cv2.imshow('frame', frame)
+
+        return pos
 
 
 
@@ -176,8 +211,8 @@ def track():
 
                 # Add the center to the drawing
                 try:
-                    cv2.circle(drawing, center, 2, (0, 255, 0), -1)
-                    cv2.line(drawing, center, point, (0, 255, 0), 1)
+                    cv2.circle(frame, center, 2, (0, 255, 0), -1)
+                    cv2.line(frame, center, point, (0, 255, 0), 1)
                     point = center
                 except:
                     pass
