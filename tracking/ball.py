@@ -18,7 +18,7 @@ class Ball:
     _last_frame = (None, None)
     _window = {'width': -1, 'height': -1}
 
-    def __init__(self, video_source, color_range, dimensions):
+    def __init__(self, video_source, color_range):
         """
         Params:
             - video_source : opencv video source (camera or file)
@@ -27,7 +27,6 @@ class Ball:
             - dimentions : 'real' height and width of the window in meters
         """
         self._video_source = video_source
-        self._dimensions = dimensions
         self.color_range = color_range
 
     def start_positionning(self):
@@ -93,7 +92,7 @@ class Ball:
 
     def _get_new_position(self):
         """
-        Read a new image and determines (x,y) and return it
+        Read a new image and determines (x,y) and returns it
         If no position is found, returns (-1, -1)
         """
 
@@ -221,7 +220,7 @@ def track():
         delta_t = tac - tic
         tic = tac
 
-        cv2.putText(frame, str(1/delta_t)[:5] + ' FPS', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 3)
+        cv2.putText(frame, str(1/delta_t)[:5] + ' FPS', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
         cv2.imshow('frame', frame)
 

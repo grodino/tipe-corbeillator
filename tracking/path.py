@@ -3,21 +3,15 @@ class Path:
 	From a array of initial positions and a model, predicts the path of an objet
 	"""
 
-	model = None
 	pos_y = None
-	initial_positions = []
 
-	def __init__(self, model, initial_positions):
+	def __init__(self, pos_y):
 		"""
 		params:
-			- model : a function that accepts an array of initial positions
-			and returns a function of x coordinate that returns the y coordinate
+			- pos_y : a function that give the y coordinate in function of the x coordinate
 		"""
 
-		self.model = model
-		self.initial_positions = initial_positions
-
-		self.pos_y = self.model(initial_positions)
+		self.pos_y = pos_y
 
 	def falling_point(self, window, h_limit, precision):
 		"""
