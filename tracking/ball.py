@@ -10,7 +10,7 @@ class Ball:
     """
 
     positions = []
-    MAX_GET_POS_RETRIES = 10
+    MAX_GET_POS_RETRIES = 20
 
     _video_source = None
     _video_capture = None
@@ -18,7 +18,7 @@ class Ball:
     _last_frame = (None, None)
     _window = {'width': -1, 'height': -1}
 
-    def __init__(self, video_source, color_range):
+    def __init__(self, video_source, color_range, max_retries=20):
         """
         Params:
             - video_source : opencv video source (camera or file)
@@ -28,6 +28,7 @@ class Ball:
         """
         self._video_source = video_source
         self.color_range = color_range
+        self.MAX_GET_POS_RETRIES = max_retries
 
     def start_positionning(self):
         """
@@ -153,6 +154,9 @@ class Ball:
 
         return pos
 
+    @property
+    def window(self):
+        return self._window
 
 
 def track():

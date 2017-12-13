@@ -5,12 +5,21 @@ import cv2
 
 class RealWorld:
 	ratio = None
+	object_color = None
+	motor_max_speed = None
+	# Distance between the origin of the x axis of the camera
+	# and the origin of the x axis of the rails of the trash
+	dist_origin_rails = None 
 
 	def __init__(self):
 		with open('C:/Users/agodi/Desktop/tipe-corbeillator/config/config.json') as file:
 			data = json.load(file)
 
 		self.ratio = data['px_m_ratio']
+		self.object_color = data['object_color']
+		self.motor_max_speed = data['motor_max_speed'] # rad/s
+		self.motor_max_acceleration = data['motor_max_acceleration'] # rad/s²
+		self.dist_origin_rails = data['dist_origin_rails'] # m
 
 	def save(self):
 		"""
@@ -22,8 +31,12 @@ class RealWorld:
 
 		with open('C:/Users/agodi/Desktop/tipe-corbeillator/config/config.json', 'w') as file:
 			data['px_m_ratio'] = self.ratio
+			data['object_color'] = self.object_color
+			data['motor_max_speed'] = self.motor_max_speed
+			data['motor_max_acceleration'] = self.motor_max_acceleration
+			data['dist_origin_rails'] = self.dist_origin_rails
 
-			json.dump(data, file)
+			json.dump(data, file, indent=4, sort_keys=True)
 
 
 	def config_distances(self, image, real_w, real_h):
@@ -94,3 +107,20 @@ class RealWorld:
 		self.ratio = (vertical_ratio + horizontal_ratio)/2
 
 		return self.ratio
+
+	def config_colors(self, image):
+		"""
+		Get the rgb value of the pixel in the center of the image and 
+		returns it
+
+		params:
+			- image : RGB color image
+
+		"""
+
+		height = len(image)
+		width = len(image[0])
+
+		self.object_color = list(map(int, image[height//2, width//2]))
+
+		return self.object_color

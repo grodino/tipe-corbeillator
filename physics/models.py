@@ -19,9 +19,6 @@ def free_fall(initial_positions, ratio):
 		])
 		initial_pos = array([x0, y0])
 
-		print('INITIAL_POS', initial_pos)
-		print('INITIAL_SPEED', initial_speed)
-
 		def pos_y(x):
 			t = (x - x0) / initial_speed[0]
 

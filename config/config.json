@@ -1,1 +1,11 @@
-{"px_m_ratio": 499.1582491582492}
+{
+    "dist_origin_rails": 2,
+    "motor_max_speed": 129,
+    "motot_max_acceleration": 120,
+    "object_color": [
+        146,
+        49,
+        73
+    ],
+    "px_m_ratio": 200.0
+}
