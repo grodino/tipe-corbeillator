@@ -169,6 +169,7 @@ if args.config_distances:
 	gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 	print(real_world.config_distances(gray, w, h), 'px/m')
 	real_world.save()
+	exit()
 
 
 ##################

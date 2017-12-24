@@ -1,0 +1,3 @@
+- Construire le prototype en priorité
+- Le tester en boucle ouverte
+- Séparer le Thread moteur du thread analyse d'image

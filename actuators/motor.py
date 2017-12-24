@@ -20,6 +20,7 @@ class Motor(SerialActuator):
 			- max_speed: the maximum rotation speed of the motor in rad/s
 			- max_acceleration: the maximum rotation acceleration of the motor
 				in rad/s^2
+			- ratio : the rotation to translation ratio in m/rad
 		"""
 
 		self._pwm = 0
@@ -84,7 +85,6 @@ class Motor(SerialActuator):
 			print('[SERIAL MOTOR] SENT ORDER : ', order)
 		
 		result = self.exec(order)
-
 
 # arduino_console = serial.Serial('COM3', 9600, timeout=1, write_timeout=2)
 
