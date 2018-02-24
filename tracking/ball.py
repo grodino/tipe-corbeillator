@@ -3,7 +3,7 @@ from time import sleep, clock
 import numpy as np
 import cv2
 
-class Ball:
+class Ball(object):
     """
     The position of the ball, and methods to get it
     The theoricall falling point of the ball and methods to get it

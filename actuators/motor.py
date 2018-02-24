@@ -4,6 +4,10 @@ import serial
 
 from actuators.interface import SerialActuator
 
+# TODO : plutôt que de d'envoyer et attendre une réponse, faire en sorte que
+# l'arduino envoie en continue sont état, le stocker et comme ça juste lire la
+# variable stockée quand on veut la valeur
+# => C'est ici qu'il faut le thread différent !
 
 class Motor(SerialActuator):
 	pwm = 0
@@ -13,7 +17,7 @@ class Motor(SerialActuator):
 
 	_prev_speed_measure = (0, 0)
 	
-	def __init__(self, serial_console, max_speed=200, max_acceleration=200):
+	def __init__(self, serial_console, max_speed=200, max_acceleration=200, debug=False):
 		"""
 		params:
 			- serial_console: the serial.Serial object used to communicate
@@ -29,7 +33,7 @@ class Motor(SerialActuator):
 		self.max_acceleration = max_acceleration
 		self._prev_speed_measure = (0, time.clock())
 
-		super().__init__(serial_console)
+		super().__init__(serial_console, debug)
 
 	@property
 	def speed(self):
@@ -39,12 +43,7 @@ class Motor(SerialActuator):
 		TODO : use a sensor instead of a stored value
 		"""
 
-		val = (self._pwm/255)*self.max_speed
-
-		self._prev_speed_measure = (
-			val,
-			time.clock()
-		)
+		val = self.get_value()
 
 		return val
 

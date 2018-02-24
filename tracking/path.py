@@ -1,4 +1,4 @@
-class Path:
+class Path(object):
 	"""
 	From a array of initial positions and a model, predicts the path of an objet
 	"""

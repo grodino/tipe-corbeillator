@@ -3,40 +3,63 @@ import json
 import cv2
 
 
-class RealWorld:
-	ratio = None
-	object_color = None
-	motor_max_speed = None
-	# Distance between the origin of the x axis of the camera
-	# and the origin of the x axis of the rails of the trash
-	dist_origin_rails = None 
+class RealWorld(object):
+	"""
+	Reads, computes and manages config vars
+	"""
 
 	def __init__(self):
-		with open('C:/Users/agodi/Desktop/tipe-corbeillator/config/config.json') as file:
-			data = json.load(file)
+		with open('config/config.json') as file:
+			self._config_data = json.load(file)
+		
+		self._keys = [var["name"] for var in self._config_data]
+		
+		docstring = 'Config vars: \n'
+		for var in self._config_data:
+			docstring += var['name']
+			docstring += ' : '
+			docstring += var['description']
+			docstring += '\n'
+			docstring += '    units: '
+			docstring += var['unit']
+			docstring += '\n\n'
+		
+		if self.__doc__:
+			self.__doc__ += '\n' + docstring
+		else:
+			self.__doc__ = '\n' + docstring
 
-		self.ratio = data['px_m_ratio']
-		self.object_color = data['object_color']
-		self.motor_max_speed = data['motor_max_speed'] # rad/s
-		self.motor_max_acceleration = data['motor_max_acceleration'] # rad/s²
-		self.dist_origin_rails = data['dist_origin_rails'] # m
+	def __getattr__(self, name):
+		"""
+		Checks if the name is in the config data, if yes returns its value
+		else, use default behaviour
+		"""
+
+		if name in self._keys:
+			return self._config_data[self._keys.index(name)]['value']
+		else:
+			raise AttributeError('Attribute ' + name + ' was not found in class ' + str(self))
+
+	def __setattr__(self, name, value):
+		"""
+		Checks if the name is in the config data, if yes saves it in the config data
+		else, use default behaviour
+		"""
+
+		if not name.startswith('_'):
+			if name in self._keys:
+				self._config_data[self._keys.index(name)]['value'] = value
+		else:
+			super().__setattr__(name, value)
+
 
 	def save(self):
 		"""
 		Saves all config vars to the config.json file
 		"""
 
-		with open('C:/Users/agodi/Desktop/tipe-corbeillator/config/config.json') as file:
-			data = json.load(file)
-
-		with open('C:/Users/agodi/Desktop/tipe-corbeillator/config/config.json', 'w') as file:
-			data['px_m_ratio'] = self.ratio
-			data['object_color'] = self.object_color
-			data['motor_max_speed'] = self.motor_max_speed
-			data['motor_max_acceleration'] = self.motor_max_acceleration
-			data['dist_origin_rails'] = self.dist_origin_rails
-
-			json.dump(data, file, indent=4, sort_keys=True)
+		with open('config/config.json', 'w') as file:
+			json.dump(self._config_data, file, indent=4)
 
 
 	def config_distances(self, image, real_w, real_h):
@@ -104,9 +127,9 @@ class RealWorld:
 		# 	if cv2.waitKey(1) & 0xFF == ord('q'):
 		# 		break
 
-		self.ratio = (vertical_ratio + horizontal_ratio)/2
+		self.px_m_ratio = (vertical_ratio + horizontal_ratio)/2
 
-		return self.ratio
+		return self.px_m_ratio
 
 	def config_colors(self, image):
 		"""

@@ -74,13 +74,13 @@ def main(source, real_world):
 		# ball with x axis
 		f = free_fall(
 			[positions[-1], positions[-2]],
-			real_world.ratio
+			real_world.px_m_ratio
 		)
 		path = Path(f)
 
 		x_fall = path.falling_point(ball.window)
-		x_falls.append((x_fall/real_world.ratio, time.clock()))
-		belt_motor.speed = (x_fall/real_world.ratio - rail_origin)*5
+		x_falls.append((x_fall/real_world.px_m_ratio, time.clock()))
+		belt_motor.speed = (x_fall/real_world.px_m_ratio - rail_origin)*5
 
 		if cv2.waitKey(1) & 0xFF == ord('q'):
 			break
