@@ -1,4 +1,7 @@
-class SerialActuator:
+import time
+
+
+class SerialActuator(object):
 	"""
 	Abstracts the serial interface between python and the arduino
 	"""
@@ -15,9 +18,18 @@ class SerialActuator:
 		self._console = console
 		self._debug = debug
 
+		if self._debug:
+			print('[SERIAL] CONNECTING')
+
 		# HANDSHAKE
-		while self._console.in_waiting <= 0:
-			self._console.write(b'0')
+		while self.get_value() != 'READY':
+			time.sleep(0.5)
+
+		while self.get_value() == 'READY':
+			self._console.write(b'1')
+			time.sleep(0.5)
+		
+		time.sleep(3) # Avoid bugs
 
 		if self._debug:
 			print('[SERIAL] CONNEXION READY')
@@ -54,7 +66,7 @@ class SerialActuator:
 			pass
 
 		answer = []
-		message_returned = str(self._console.readline().decode('ascii')).replace('\r\n', '')
+		message_returned = self.get_value()
 
 		# Read all the lines returned by the serial connexion
 		while message_returned != '':
@@ -65,3 +77,17 @@ class SerialActuator:
 		answer = list(filter(lambda x: x != '17497', answer))
 
 		return answer
+	
+	def get_value(self):
+		"""
+		Returns the first value in the buffer
+		"""
+
+		self._console.reset_input_buffer()
+		read_value = self._console.readline()
+
+		if self._debug:
+			print('[SERIAL] READ VALUE : ', read_value)
+			print('[SERIAL] IN WAITING : ', self._console.in_waiting)
+
+		return str(read_value.decode('ascii')).replace('\r\n', '')

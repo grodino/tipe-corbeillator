@@ -2,125 +2,151 @@ import json
 
 import cv2
 
-
-class RealWorld:
-	ratio = None
-	object_color = None
-	motor_max_speed = None
-	# Distance between the origin of the x axis of the camera
-	# and the origin of the x axis of the rails of the trash
-	dist_origin_rails = None 
-
-	def __init__(self):
-		with open('C:/Users/agodi/Desktop/tipe-corbeillator/config/config.json') as file:
-			data = json.load(file)
-
-		self.ratio = data['px_m_ratio']
-		self.object_color = data['object_color']
-		self.motor_max_speed = data['motor_max_speed'] # rad/s
-		self.motor_max_acceleration = data['motor_max_acceleration'] # rad/s²
-		self.dist_origin_rails = data['dist_origin_rails'] # m
-
-	def save(self):
-		"""
-		Saves all config vars to the config.json file
-		"""
-
-		with open('C:/Users/agodi/Desktop/tipe-corbeillator/config/config.json') as file:
-			data = json.load(file)
-
-		with open('C:/Users/agodi/Desktop/tipe-corbeillator/config/config.json', 'w') as file:
-			data['px_m_ratio'] = self.ratio
-			data['object_color'] = self.object_color
-			data['motor_max_speed'] = self.motor_max_speed
-			data['motor_max_acceleration'] = self.motor_max_acceleration
-			data['dist_origin_rails'] = self.dist_origin_rails
-
-			json.dump(data, file, indent=4, sort_keys=True)
+import numpy as np
 
 
-	def config_distances(self, image, real_w, real_h):
-		"""
-		Protocol:
-			- The operator places a rectangle in landscape mode of a known height and width
-			- The function detects the rectangle and calculates it's dimensions
-			- Returns the ratio px/m avering it in height and width
-		
-		Params:
-			- image : a matrix of pixels in grayscale
+class RealWorld(object):
+    """
+    Reads, computes and manages config vars
+    """
 
-		Saves the value of the ratio into config.json
-		"""
+    def __init__(self):
+        with open('config/config.json') as file:
+            self._config_data = json.load(file)
+        
+        self._keys = [var["name"] for var in self._config_data]
+        
+        docstring = 'Config vars: \n'
+        for var in self._config_data:
+            docstring += var['name']
+            docstring += ' : '
+            docstring += var['description']
+            docstring += '\n'
+            docstring += '    units: '
+            docstring += var['unit']
+            docstring += '\n\n'
+        
+        if self.__doc__:
+            self.__doc__ += '\n' + docstring
+        else:
+            self.__doc__ = '\n' + docstring
 
-		# Blur the image in order not to have to much details
-		blurred = cv2.GaussianBlur(image, (5, 5), 0)
-		thresh = cv2.threshold(blurred, 200, 255, cv2.THRESH_BINARY)[1]
+    def __getattr__(self, name):
+        """
+        Checks if the name is in the config data, if yes returns its value
+        else, use default behaviour
+        """
 
-		# find all the contours in the image
-		cnts = cv2.findContours(
-			thresh.copy(),
-			cv2.RETR_EXTERNAL,
-			cv2.CHAIN_APPROX_SIMPLE)[-2]
+        if name in self._keys:
+            return self._config_data[self._keys.index(name)]['value']
+        else:
+            raise AttributeError('Attribute ' + name + ' was not found in class ' + str(self))
 
-		# keep only the rectangles
-		def is_rect(c):
-			""" Approximation : 4 vertices = rectangle """
-			perimeter = cv2.arcLength(c, True)
-			approx = cv2.approxPolyDP(c, 0.04 * perimeter, True)
+    def __setattr__(self, name, value):
+        """
+        Checks if the name is in the config data, if yes saves it in the config data
+        else, use default behaviour
+        """
 
-			return len(approx) == 4
+        if not name.startswith('_'):
+            if name in self._keys:
+                self._config_data[self._keys.index(name)]['value'] = value
+        else:
+            super().__setattr__(name, value)
 
-		rects = list(filter(is_rect, cnts))
+    def save(self):
+        """
+        Saves all config vars to the config.json file
+        """
 
-		if len(rects) <= 0:
-			raise ValueError('Could not find the reference rectangle')
+        with open('config/config.json', 'w') as file:
+            json.dump(self._config_data, file, indent=4)
 
-		biggest_rect = rects[0]
-		peri = cv2.arcLength(biggest_rect, True)
-		approx = cv2.approxPolyDP(biggest_rect, 0.04 * peri, True)
-		x, y, w, h = cv2.boundingRect(approx)
-		biggest_area = w * h
+    def config_distances(self, image, real_w, real_h):
+        """
+        Protocol:
+            - The operator places a rectangle in landscape mode of a known height and width
+            - The function detects the rectangle and calculates it's dimensions
+            - Returns the ratio px/m avering it in height and width
+        
+        Params:
+            - image : a matrix of pixels in RGB
 
-		# Detect the biggest rectangle (by the area) (assuming it is our reference)
-		for c in rects:
-			peri = cv2.arcLength(c, True)
-			approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+        Saves the value of the ratio into config.json
+        """
 
-			x, y, w, h = cv2.boundingRect(approx)
-			area = w * h
+        # Blur the image in order not to have to much details
+        color = image[len(image)//2, len(image[0])//2]
+        unit_vect = np.array([1, 1, 1])
 
-			if area > biggest_area:
-				biggest_rect = c
-				biggest_area = area
+        mask = cv2.inRange(image, color - 15*unit_vect, color + 15*unit_vect)
+        mask = cv2.erode(mask, None, iterations=2)
 
-		vertical_ratio = w / real_w
-		horizontal_ratio = h / real_h
+        # find all the contours in the image
+        cnts = cv2.findContours(
+            mask.copy(),
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE)[-2]
 
-		# cv2.rectangle(thresh, (x, y), (x + w, y + h), (0, 255, 0), 3)
-		# cv2.imshow('Shape Detection', thresh)
+        # keep only the rectangles
+        def is_rect(c):
+            """ Approximation : 4 vertices = rectangle """
+            perimeter = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.04 * perimeter, True)
 
-		# while 1:
-		# 	# WARNING ! DO NOT DELETE
-		# 	if cv2.waitKey(1) & 0xFF == ord('q'):
-		# 		break
+            return len(approx) == 4
 
-		self.ratio = (vertical_ratio + horizontal_ratio)/2
+        rects = list(filter(is_rect, cnts))
 
-		return self.ratio
+        if len(rects) <= 0:
+            raise ValueError('Could not find the reference rectangle')
 
-	def config_colors(self, image):
-		"""
-		Get the rgb value of the pixel in the center of the image and 
-		returns it
+        biggest_rect = rects[0]
+        peri = cv2.arcLength(biggest_rect, True)
+        approx = cv2.approxPolyDP(biggest_rect, 0.04 * peri, True)
+        x, y, w, h = cv2.boundingRect(approx)
+        biggest_area = w * h
 
-		params:
-			- image : RGB color image
+        # Detect the biggest rectangle (by the area) (assuming it is our reference)
+        for c in rects:
+            peri = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.04 * peri, True)
 
-		"""
+            x, y, w, h = cv2.boundingRect(approx)
+            area = w * h
 
-		height = len(image)
-		width = len(image[0])
+            if area > biggest_area:
+                biggest_rect = c
+                biggest_area = area
 
-		self.object_color = list(map(int, image[height//2, width//2]))
+        vertical_ratio = w / real_w
+        horizontal_ratio = h / real_h
 
-		return self.object_color
+        cv2.rectangle(image, (x, y), (x + w, y + h), (255, 165, 0), 3)
+        cv2.imshow('Shape Detection', image)
+
+        while 1:
+            # WARNING ! DO NOT DELETE
+            if cv2.waitKey(1) & 0xFF == ord('d'):
+                break
+
+        self.px_m_ratio = (vertical_ratio + horizontal_ratio)/2
+
+        return self.px_m_ratio
+
+    def config_colors(self, image):
+        """
+        Get the rgb value of the pixel in the center of the image and 
+        returns it
+
+        params:
+            - image : RGB color image
+
+        """
+
+        height = len(image)
+        width = len(image[0])
+
+        self.object_color = list(map(int, image[height//2, width//2]))
+
+        return self.object_color

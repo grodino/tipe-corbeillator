@@ -13,16 +13,17 @@ from physics.models import free_fall
 from actuators.motor import Motor
 
 
-def main(source, real_world):
+def main(source, port, real_world):
 	############################
 	#   MOTOR INITIALISATION   #
 	############################
 
-	arduino_console = serial.Serial('COM3', 9600, timeout=1, write_timeout=2)
+	arduino_console = serial.Serial(port, 230400, timeout=0.01)
 
 	belt_motor = Motor(
 		arduino_console, 
-		max_speed=real_world.motor_max_speed
+		max_speed=real_world.motor_max_speed,
+		debug=True
 	)
 	# avoids some bugs with serial
 	time.sleep(0.5)
@@ -41,7 +42,7 @@ def main(source, real_world):
 	upper = array([x + 20 for x in real_world.object_color])
 	lower = array([x - 20 for x in real_world.object_color])
 
-	ball = Ball(source, (lower, upper), max_retries=1000)
+	ball = Ball(source, (lower, upper), max_retries=1000, debug=True)
 	ball.start_positionning()
 	rail_origin = real_world.dist_origin_rails
 
@@ -52,6 +53,7 @@ def main(source, real_world):
 	
 	i = 0
 	positions = []
+	models = []
 	x_falls = []
 
 	# Wait for the ball to appear
@@ -74,13 +76,25 @@ def main(source, real_world):
 		# ball with x axis
 		f = free_fall(
 			[positions[-1], positions[-2]],
-			real_world.ratio
+			real_world.px_m_ratio
 		)
+		models.append(f)
 		path = Path(f)
 
 		x_fall = path.falling_point(ball.window)
-		x_falls.append((x_fall/real_world.ratio, time.clock()))
-		belt_motor.speed = (x_fall/real_world.ratio - rail_origin)*5
+		x_falls.append((x_fall, time.clock()))
+		
+		t = time.clock()
+
+		success = False
+		while not success:
+			try:
+				belt_motor.position = int((x_fall/real_world.px_m_ratio)*real_world.encoder_ratio*1000)
+				success = True
+			except:
+				success = False
+				
+		print('WROTE IN ', time.clock() - t)
 
 		if cv2.waitKey(1) & 0xFF == ord('q'):
 			break
@@ -90,12 +104,21 @@ def main(source, real_world):
 	#  TEMP: DRAW POSITIONS  #
 	##########################
 	print("Number of positions:", len(positions))
-	x_falls = array(x_falls)
-	X = x_falls[:,1]
-	Y = x_falls[:,0]
+	print(positions)
+	
+	positions = array(positions)
+	X = positions[:,0]
+	Y = positions[:,1]
 
-	pl.plot(X, x_falls)
-	pl.legend(['Abscysse du point de chute anticipé en fonction du temps'])
+	# for point in x_falls:
+	# 	pl.plot(point[0], 0, 'ro')
+
+	for model in models:
+		pl.plot(X, [model(x) for x in X])
+
+	pl.plot(X, Y)
+	#pl.plot(X, [f(x) for x in X])
+	pl.legend(['position']+[str(i) for i in range(len(models))])
 	pl.show()
 
 
@@ -113,14 +136,18 @@ def main(source, real_world):
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-	'--config-distances', 
-	help='Enter the distances configuration menu',
-	action='store_true')
-parser.add_argument(
 	'--source',
 	help="""Specifies the video source to use with opencv, can be a path to a 
 			video file or the index of the camera')"""
 )
+parser.add_argument(
+	'--port',
+	help='Specifies the port to use to connect to the arduino'
+)
+parser.add_argument(
+	'--config-distances', 
+	help='Enter the distances configuration menu',
+	action='store_true')
 parser.add_argument(
 	'--config-color',
 	help='Enter the ball color configuration menu',
@@ -129,14 +156,16 @@ parser.add_argument(
 
 args = parser.parse_args()
 source = 0
+port = 'COM0'
 real_world = RealWorld()
 
 if args.source:
 	if args.source.isnumeric():
 		source = int(args.source)
-	else:
-		source = args.source
 
+if args.port:
+	if 'COM' in args.port and args.port.replace('COM', '').isnumeric():
+		port = args.port
 
 ####################
 # DISTANCES CONFIG #
@@ -155,10 +184,14 @@ if args.config_distances:
 
 		cv2.putText(
 			frame, 
-			'Place the reference paper landscape mode then press the d key',
+			'Place the reference paper behind the center then press the d key',
 			(0, 20),
 			cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 3
 		)
+		height = len(frame)
+		width = len(frame[0])
+		cv2.circle(frame, (width//2, height//2), 3, (0, 255, 0))
+
 		cv2.imshow('CONFIG', frame)
 
 		if cv2.waitKey(1) & 0xFF == ord('d'):
@@ -166,8 +199,8 @@ if args.config_distances:
 
 	ret, frame = capture.read()
 
-	gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-	print(real_world.config_distances(gray, w, h), 'px/m')
+	img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+	print(real_world.config_distances(img, w, h), 'px/m')
 	real_world.save()
 	exit()
 
@@ -205,6 +238,11 @@ if args.config_color:
 	
 	print(real_world.config_colors(rgb_frame))
 	real_world.save()
+	exit()
 
-else:
-	main(source, real_world)
+
+#################
+# RUN MAIN LOOP #
+#################
+if __name__ == '__main__':
+	main(source, port, real_world)

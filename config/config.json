@@ -1,11 +1,48 @@
-{
-    "dist_origin_rails": 2,
-    "motor_max_acceleration": 100,
-    "motor_max_speed": 16.7552,
-    "object_color": [
-        49,
-        132,
-        163
-    ],
-    "px_m_ratio": 370.8994708994709
-}
+[
+    {
+        "name": "object_color",
+        "unit": "RGB",
+        "description": "Color of the followed object",
+        "value": [
+            255,
+            116,
+            56
+        ]
+    },
+    {
+        "name": "dist_origin_rails",
+        "unit": "m",
+        "description": "Distance between the origin of the camera window and the origin of the rails",
+        "value": 0
+    },
+    {
+        "name": "motor_max_acceleration",
+        "unit": "rad/s\u00c2\u00b2",
+        "description": "Maximum angular acceleration of the motor",
+        "value": 100
+    },
+    {
+        "name": "motor_max_speed",
+        "unit": "rad/s",
+        "description": "Maximum angular speed of the motor",
+        "value": 16.7552
+    },
+    {
+        "name": "px_m_ratio",
+        "unit": "px/m",
+        "description": "Number of pixels per meter",
+        "value": 483.30928330928333
+    },
+    {
+        "name": "encoder_ratio",
+        "unit": "top/tr",
+        "description": "Number of tops per revolution of the encoder",
+        "value": 400
+    },
+    {
+        "name": "reduction_ratio",
+        "unit": "1",
+        "description": "Number of crank revolutions per motor revolution",
+        "value": 0.02
+    }
+]

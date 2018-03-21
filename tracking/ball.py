@@ -3,7 +3,7 @@ from time import sleep, clock
 import numpy as np
 import cv2
 
-class Ball:
+class Ball(object):
     """
     The position of the ball, and methods to get it
     The theoricall falling point of the ball and methods to get it
@@ -17,8 +17,9 @@ class Ball:
     _color_range = ((-1, -1, -1), (-1, -1, -1))
     _last_frame = (None, None)
     _window = {'width': -1, 'height': -1}
+    _debug = False
 
-    def __init__(self, video_source, color_range, max_retries=20):
+    def __init__(self, video_source, color_range, max_retries=20, debug=False):
         """
         Params:
             - video_source : opencv video source (camera or file)
@@ -29,6 +30,7 @@ class Ball:
         self._video_source = video_source
         self.color_range = color_range
         self.MAX_GET_POS_RETRIES = max_retries
+        self._debug = debug
 
     def start_positionning(self):
         """
@@ -79,12 +81,20 @@ class Ball:
         pos = self._get_new_position()
         retries = 0
 
+        if self._debug:
+            print('[TRACKING] GETTING POSITION')
+
         while pos[0] == -1 and pos[1] == -1 and retries <= self.MAX_GET_POS_RETRIES:
+            if self._debug and retries:
+                print('[TRACKING] ', retries, ' ATTEMPTS FAILED, RETRYING')
+            
             pos = self._get_new_position()
             retries += 1
 
         if retries > self.MAX_GET_POS_RETRIES:
             raise ValueError("Tracking failed")
+        elif self._debug:
+            print('[TRACKING] POSITION FOUND : ', pos)
 
         self.positions.append(pos)
 
@@ -108,7 +118,7 @@ class Ball:
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        # Filter only the black pixels
+        # Filter only the pixels in the right range of colors
         mask = cv2.inRange(rgb, self.color_range[0], self.color_range[1])
         mask = cv2.erode(mask, None, iterations=2)
 
@@ -144,6 +154,7 @@ class Ball:
                 # Add the center to the drawing
                 try:
                     cv2.circle(frame, center, 2, (0, 255, 0), -1)
+                    cv2.circle(frame, (0, 0), 2, (0, 255, 0), -1)
                 except:
                     print('OUCH')
                     pass
