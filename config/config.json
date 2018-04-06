@@ -4,9 +4,9 @@
         "unit": "RGB",
         "description": "Color of the followed object",
         "value": [
-            255,
-            116,
-            56
+            218,
+            54,
+            0
         ]
     },
     {

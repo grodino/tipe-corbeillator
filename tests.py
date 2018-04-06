@@ -1,11 +1,15 @@
 import time
 
+import cv2
 import serial
 import numpy as np
 from matplotlib import pyplot as pl
 
+from tracking.path import Path
 from actuators.motor import Motor
+from physics.models import free_fall
 from config.environment import RealWorld
+from tracking.ball import Ball, display_info
 
 
 def constraint(val, a, b):
@@ -16,12 +20,13 @@ def constraint(val, a, b):
     
     return val
 
+
 ################################
 # OPEN LOOP MOTOR DRIVING TEST #
 ################################
-if __name__ == '__main__':
+def open_loop_motor_test():
     real_world = RealWorld()
-    arduino_console = serial.Serial('COM3', 230400, timeout=1, write_timeout=2)
+    arduino_console = serial.Serial('COM6', 230400, timeout=1, write_timeout=2)
 
     motor = Motor(
         arduino_console, 
@@ -33,36 +38,223 @@ if __name__ == '__main__':
 
     print(motor.position)
     #motor.position = 30_000
-    sine_wave = 5_000*np.sin(np.linspace(0, 100, num=500))
 
-    speed_measures = []
-    pos_measures = []
-    consignes = []
-    times = []
+    sine_freq = 0.1 # Hz
+    sine_amplitude = 5_000 # inc
+    exp_duration = 10 # s
 
-    for value in sine_wave:
-        motor.position = int(35_000 + value)
-        consignes.append(int(35_000 + value))
-        times.append(time.clock())
-        speed_measures.append(motor.speed)
-        pos_measures.append(motor.position)
+    results = []
+
+    for i in range(8):
+        sine_freq += 0.1
+
+        speed_measures = []
+        pos_measures = []
+        consignes = []
+        times = []
+
+        t_start = time.clock()
+        t = t_start
+        
+        while t - t_start < exp_duration:
+            times.append(t - t_start)
+            speed_measures.append(motor.speed)
+            pos_measures.append(motor.position)
+            
+            order = int(sine_amplitude*np.sin(2*np.pi*sine_freq*(t - t_start)))
+            motor.speed = order
+            consignes.append(order)
+            t = time.clock()
+
+        pos_measures = np.array(pos_measures)
+        pos_spectrum = np.fft.rfft(pos_measures)
+
+        speed_measures = np.array(speed_measures)
+        speed_spectrum = np.fft.rfft(speed_measures)
+
+        pl.plot(consignes, speed_measures)
+        pl.show()
+
+        # pl.close('all')
+        # fig, (ax1, ax2) = pl.subplots(2)
+
+        # ax1.plot(list(range(len(spectrum))), np.abs(spectrum))
+        # ax1.legend(['spectre signal de sortie'], loc=2)
+        
+        # ax2.plot(times, pos_measures, color='r')
+        # ax2.plot(times, consignes)
+        # ax2.set_xlabel('time (s)')
+        # ax2.set_ylabel('position (inc)')
+        # ax2.legend(['position (inc)', 'consigne'], loc=1)
+        # pl.show()
+
+        results.append((
+            sine_freq,
+            max(np.abs(speed_spectrum))
+        ))
+        print(results[-1])
+
+    
+    print(results)
+    results = np.array(results)
+
+    fig, (ax1, ax2) = pl.subplots(2)
+
+    ax1.semilogx(
+        results[:,0],
+        20*np.log10(results[:,1]/sine_amplitude)
+    )
 
 
-    time.sleep(5)
+    # fig, ax1 = pl.subplots()
+    # ax2 = ax1.twinx()
 
-    fig, ax1 = pl.subplots()
-    ax2 = ax1.twinx()
+    # ax1.plot(times, pos_measures, color='r')
+    # ax1.plot(times, consignes)
+    # ax1.set_xlabel('time (s)')
+    # ax1.set_ylabel('position (inc)')
+    # ax1.legend(['position (inc)', 'consigne'], loc=1)
 
-    ax1.plot(times, pos_measures, color='r')
-    ax1.plot(times, consignes)
-    ax1.set_xlabel('time (s)')
-    ax1.set_ylabel('position (inc)')
-    ax1.legend(['position (inc)', 'consigne'], loc=1)
-
-    ax2.plot(times, speed_measures, color='b')
-    ax2.set_ylabel('speed (inc/s)')
-    ax2.legend(['speed (inc/s)'], loc=4)
+    # ax2.plot(times, speed_measures, color='b')
+    # ax2.set_ylabel('speed (inc/s)')
+    # ax2.legend(['speed (inc/s)'], loc=4)
 
 
-    pl.title('Réponse du moteur à un échellon de position')
+    pl.title('Réponse du moteur à un sinus de vitesse')
     pl.show()
+
+
+######################
+# TRACKING TIME TEST #
+######################
+def tracking_time_test():
+    real_world = RealWorld()
+    color_range = real_world.color_range
+
+    ball = Ball(0, color_range, max_retries=500, debug=True)
+
+    ball.start_positionning()
+    i = 0
+    positions = []
+    models = []
+    x_falls = []
+
+    t = time.clock()
+
+    # Wait for the ball to appear
+    while not ball.is_in_range:
+        # frame = ball._last_frame
+        # frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        # cv2.imshow('frame', frame)
+
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     break
+        dt = time.clock() - t
+        t = time.clock()
+
+        frame = ball._last_frame
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        fps = str(1/dt)
+        
+        display_info(frame, fps, color_range)
+
+        cv2.imshow('frame', frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    print('Object found')
+
+    while ball.is_in_range:
+        dt = time.clock() - t
+        t = time.clock()
+        frame = ball._last_frame
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        fps = str(1/dt)
+        
+        display_info(frame, fps, color_range)
+
+        cv2.imshow('frame', frame)
+        cv2.imshow('mask', ball._mask)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    
+
+################################
+# TRAJECTORY ANTICIPATION TEST #
+################################
+def trajectory_anticipation_test():
+    real_world = RealWorld()
+    color_range = real_world.color_range
+
+    ball = Ball(0, color_range, max_retries=100, debug=True)
+
+    ball.start_positionning()
+    i = 0
+    positions = []
+    models = []
+    x_falls = []
+
+    t = time.clock()
+
+    # Wait for the ball to appear
+    while not ball.is_in_range:
+        pass
+
+    positions.append(ball.position)
+
+    while ball.is_in_range:
+        dt = time.clock() - t
+        t = time.clock()
+
+        positions.append(ball.position)
+
+        f = free_fall(
+            [positions[-1], positions[-2]],
+            real_world.px_m_ratio
+        )
+
+        models.append(f)
+        path = Path(f)
+
+        x_fall = path.falling_point(ball.window)
+        x_falls.append((x_fall, time.clock()))
+
+        frame = ball._last_frame
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        fps = str(1/dt)
+        
+        display_info(frame, fps, color_range)
+
+        cv2.imshow('frame', frame)
+        cv2.imshow('mask', ball._mask)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    print("Number of positions:", len(positions))
+    print(positions)
+        
+    positions = np.array(positions)
+    X = positions[:,0]
+    Y = positions[:,1]
+
+    # for point in x_falls:
+    # 	pl.plot(point[0], 0, 'ro')
+
+    # for model in models:
+    #     pl.plot(X, [model(x) for x in X])
+
+    pl.plot(X, Y)
+    #pl.plot(X, [f(x) for x in X])
+    # pl.legend(['position']+[str(i) for i in range(len(models))])
+    pl.show()
+
+if __name__ == '__main__':
+    #tracking_time_test()
+    #trajectory_anticipation_test()
+    open_loop_motor_test()

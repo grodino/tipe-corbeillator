@@ -15,7 +15,8 @@ class Ball(object):
     _video_source = None
     _video_capture = None
     _color_range = ((-1, -1, -1), (-1, -1, -1))
-    _last_frame = (None, None)
+    _last_frame = None
+    _mask = None
     _window = {'width': -1, 'height': -1}
     _debug = False
 
@@ -38,7 +39,7 @@ class Ball(object):
         frame
         """
 
-        if self._last_frame != (None, None):
+        if self._last_frame != None:
             raise ValueError("Positionning has already started !")
 
         self._video_capture = cv2.VideoCapture(self._video_source)
@@ -63,10 +64,11 @@ class Ball(object):
         """
 
         current_pos = self._get_new_position()
-        self.positions.append(current_pos)
 
         if current_pos[0] == -1 and current_pos[1] == -1:
             return False
+        
+        self.positions.append(current_pos)
 
         return True
 
@@ -77,6 +79,9 @@ class Ball(object):
         If no position is found, raises an error
         Best practice is to call is_in_range before
         """
+
+        if len(self.positions) > 0:
+            return self.positions.pop(0)
 
         pos = self._get_new_position()
         retries = 0
@@ -96,10 +101,7 @@ class Ball(object):
         elif self._debug:
             print('[TRACKING] POSITION FOUND : ', pos)
 
-        self.positions.append(pos)
-
         return pos
-
 
     def _get_new_position(self):
         """
@@ -111,15 +113,15 @@ class Ball(object):
             raise ValueError('There is no opened video capture')
 
         ret, frame = self._video_capture.read()
-        self._last_frame = frame
 
         t_grabed = clock()
         pos = (-1, -1, t_grabed)
 
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         # Filter only the pixels in the right range of colors
-        mask = cv2.inRange(rgb, self.color_range[0], self.color_range[1])
+        mask = cv2.inRange(frame, self.color_range[0], self.color_range[1])
+        self._mask = mask
         mask = cv2.erode(mask, None, iterations=2)
 
         # find contours in the mask and initialize the current
@@ -160,14 +162,54 @@ class Ball(object):
                     pass
 
             pos = (center[0], self._window['height'] - center[1], clock())
-
-        cv2.imshow('frame', frame)
+        
+        
+        self._last_frame = frame
 
         return pos
 
     @property
     def window(self):
         return self._window
+
+
+def rgb_to_bgr(rgb):
+    return tuple(map(int, (rgb[2], rgb[1], rgb[0])))
+
+
+def display_info(frame, fps, color_range):
+    """
+    Takes a BGR frame and draws several information on it
+    """
+
+    width = 60
+    a = (rgb_to_bgr(color_range[1])[0] - rgb_to_bgr(color_range[0])[0])/width
+    b = (rgb_to_bgr(color_range[1])[1] - rgb_to_bgr(color_range[0])[1])/width
+    c = (rgb_to_bgr(color_range[1])[1] - rgb_to_bgr(color_range[0])[2])/width
+
+    for i in range(width):
+        cv2.rectangle(
+            frame,
+            (3*i,0),
+            (3*i,128),
+            (
+                a*i + rgb_to_bgr(color_range[0])[0],
+                b*i + rgb_to_bgr(color_range[0])[1],
+                c*i + rgb_to_bgr(color_range[0])[2]
+            ),
+            3
+        )
+
+        cv2.putText(
+            img=frame,
+            text=fps[:min(len(fps), 4)] + ' FPS',
+            org=(0, 128),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=1,
+            color=(255, 255, 255)
+        )
+
+
 
 
 def track():

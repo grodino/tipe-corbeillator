@@ -138,7 +138,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
 	'--source',
 	help="""Specifies the video source to use with opencv, can be a path to a 
-			video file or the index of the camera')"""
+			video file or the index of the camera"""
 )
 parser.add_argument(
 	'--port',
@@ -224,7 +224,13 @@ if args.config_color:
 
 		height = len(frame)
 		width = len(frame[0])
+		center = (height//2, width//2)
+		square_size = 15
+
+		y,x = (center[0] - square_size//2, center[1] - square_size//2)
+
 		cv2.circle(frame, (width//2, height//2), 3, (0, 255, 0))
+		cv2.rectangle(frame, (x, y), (x + square_size, y + square_size), 255, 2)
 
 
 		cv2.imshow('CONFIG', frame)
@@ -236,7 +242,7 @@ if args.config_color:
 
 	rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 	
-	print(real_world.config_colors(rgb_frame))
+	print(real_world.config_colors(rgb_frame, square_size))
 	real_world.save()
 	exit()
 

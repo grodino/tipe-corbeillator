@@ -134,9 +134,9 @@ class RealWorld(object):
 
         return self.px_m_ratio
 
-    def config_colors(self, image):
+    def config_colors(self, image, square_size=10):
         """
-        Get the rgb value of the pixel in the center of the image and 
+        Get the mean rgb value of the pixels in the center of the image and 
         returns it
 
         params:
@@ -147,6 +147,24 @@ class RealWorld(object):
         height = len(image)
         width = len(image[0])
 
-        self.object_color = list(map(int, image[height//2, width//2]))
+        center = (height//2, width//2)
+        n = 0
+
+        sum_rgb = np.array([0, 0, 0])
+
+        # Take the mean of the colors around the center
+        for i in range(center[0] - square_size//2, center[0] + square_size//2):
+            for j in range(center[1] - square_size//2, center[1] + square_size//2):
+                n += 1
+                sum_rgb += image[i,j]
+
+        self.object_color = list(map(int, sum_rgb/n))
 
         return self.object_color
+
+    @property
+    def color_range(self):
+        return (
+            np.array([int(x - 20) for x in self.object_color], dtype=int),
+            np.array([int(x + 20) for x in self.object_color], dtype=int)
+        )
