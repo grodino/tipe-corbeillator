@@ -95,30 +95,19 @@ class Motor(SerialActuator):
 	@speed.setter
 	def speed(self, value):
 		"""
-		Sets the speed asked if in the range the the maxspeed value
-		of the motor considering the maximum acceleration with a 
-		trapezoïd command.
-
-		Raises a ValueError of the speed asked is too high
+		Sets the speed asked if in the range the maxspeed value
+		of the motor or set it to max
 
 		params:
-			- value : speed in rad/s
+			- value : speed in pwm [-255, 255]
 		"""
 
 		if not type(value) in [int, float]:
 			raise ValueError('The speed must be an int or a float, not a ' + str(type(value)))
-		elif abs(value) > self.max_speed:
-			raise ValueError('The speed must be under the maximum speed of the motor')
-
-		t = time.clock()
-		prev_speed, prev_t = self._prev_speed_measure
-		accel_asked = (value - prev_speed)/(t - prev_t) # acceleration asked
-
-		if abs(accel_asked) > self.max_acceleration:
-			value = (accel_asked/abs(accel_asked)) * self.max_acceleration * (t - prev_t)
 
 
-		pwm = int((value/self.max_speed)*255)
+		pwm = min(abs(value), 255)
+
 		# Fill with zeros so that the number of characters is always 3
 		pwm = '0' * (3 - len(str(pwm))) + str(pwm)
 		rotation = (1, -1)[value < 0]
