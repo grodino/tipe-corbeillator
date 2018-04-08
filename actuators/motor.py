@@ -110,7 +110,7 @@ class Motor(SerialActuator):
 
 		# Fill with zeros so that the number of characters is always 3
 		pwm = '0' * (3 - len(str(pwm))) + str(pwm)
-		rotation = (1, -1)[value < 0]
+		rotation = (0, 1)[value < 0]
 
 		order = bytes('9' + str(rotation) + pwm, 'ascii')
 

@@ -21,6 +21,20 @@ def constraint(val, a, b):
     return val
 
 
+def sample_time(times):
+    """
+    Returns the mean sample time of the array of time instants given
+    
+    params:
+        - times : array of instants
+    """
+
+    n = len(times)
+    diffs = [times[i+1] - times[i] for i in range(n - 1)]
+
+    return sum(diffs)/len(diffs)
+
+
 ################################
 # OPEN LOOP MOTOR DRIVING TEST #
 ################################
@@ -31,17 +45,19 @@ def open_loop_motor_test():
     motor = Motor(
         arduino_console, 
         max_speed=real_world.motor_max_speed,
-        debug=True
+        debug=False
     )
     # avoids some bugs with serial
     time.sleep(1)
 
     print(motor.position)
-    #motor.position = 30_000
 
+    ############
+    # MEASURES #
+    ############
     sine_freq = 0.1 # Hz
-    sine_amplitude = 5_000 # inc
-    exp_duration = 10 # s
+    sine_amplitude = 255 # pwm
+    exp_duration = 15 # s
 
     results = []
 
@@ -65,45 +81,46 @@ def open_loop_motor_test():
             motor.speed = order
             consignes.append(order)
             t = time.clock()
-
-        pos_measures = np.array(pos_measures)
-        pos_spectrum = np.fft.rfft(pos_measures)
-
-        speed_measures = np.array(speed_measures)
-        speed_spectrum = np.fft.rfft(speed_measures)
-
-        pl.plot(consignes, speed_measures)
-        pl.show()
-
-        # pl.close('all')
-        # fig, (ax1, ax2) = pl.subplots(2)
-
-        # ax1.plot(list(range(len(spectrum))), np.abs(spectrum))
-        # ax1.legend(['spectre signal de sortie'], loc=2)
         
-        # ax2.plot(times, pos_measures, color='r')
-        # ax2.plot(times, consignes)
-        # ax2.set_xlabel('time (s)')
-        # ax2.set_ylabel('position (inc)')
-        # ax2.legend(['position (inc)', 'consigne'], loc=1)
-        # pl.show()
+        # pos_measures = np.array(pos_measures)
+        # pos_spectrum = np.fft.rfft(pos_measures)
 
-        results.append((
-            sine_freq,
-            max(np.abs(speed_spectrum))
-        ))
-        print(results[-1])
+        # speed_measures = np.array(speed_measures)
+        # speed_spectrum = np.fft.rfft(speed_measures)
 
+        results.append({
+            "order_freq": sine_freq,
+            "times": times,
+            "speed_measures": speed_measures,
+            "pos_measures": pos_measures
+        })
+
+    ############
+    # ANALYSIS #
+    ############
+
+    n_experiments = len(results)
+
+    # plot all the experiments measures
+    fig, axes = pl.subplots(n_experiments)
+
+    for i in range(n_experiments):
+        axes[i].plot(results[i]['times'], results[i]['pos_measures'])
+        axes[i].legend(['position mesurée (inc) '])
+        
+        ax2 = axes[i].twinx()
+        ax2.plot(results[i]['times'], results[i]['speed_measures'])
+        ax2.legend(['vitesse mesurée (inc/ms)'])
     
-    print(results)
-    results = np.array(results)
+    # ax1.semilogx(
+    #     results[:,0],
+    #     20*np.log10(results[:,1])
+    # )
 
-    fig, (ax1, ax2) = pl.subplots(2)
-
-    ax1.semilogx(
-        results[:,0],
-        20*np.log10(results[:,1]/sine_amplitude)
-    )
+    # ax1.semilogx(
+    #     results[:,0],
+    #     results[:,2]
+    # )
 
 
     # fig, ax1 = pl.subplots()
@@ -120,7 +137,7 @@ def open_loop_motor_test():
     # ax2.legend(['speed (inc/s)'], loc=4)
 
 
-    pl.title('Réponse du moteur à un sinus de vitesse')
+    #pl.title('Réponse du moteur à un sinus de vitesse')
     pl.show()
 
 
