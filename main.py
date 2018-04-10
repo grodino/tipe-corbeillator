@@ -1,3 +1,4 @@
+import os
 import time
 import argparse
 
@@ -6,6 +7,8 @@ import serial
 from numpy import array
 from matplotlib import pyplot as pl
 
+from tests.tests import list_tests
+
 from config.environment import RealWorld
 from tracking.ball import Ball
 from tracking.path import Path
@@ -13,7 +16,25 @@ from physics.models import free_fall
 from actuators.motor import Motor
 
 
-def main(source, port, real_world):
+def clear_cmd():
+	"""
+	Utility function that clear the shell
+	"""
+
+	try:
+		os.system('clear')
+	except:
+		pass
+	
+	try:
+		os.system('cls')
+	except:
+		pass
+
+################################################################################
+#                                     MAIN                                     #
+################################################################################
+def main(source, port, real_world, debug):
 	############################
 	#   MOTOR INITIALISATION   #
 	############################
@@ -23,7 +44,7 @@ def main(source, port, real_world):
 	belt_motor = Motor(
 		arduino_console, 
 		max_speed=real_world.motor_max_speed,
-		debug=True
+		debug=debug
 	)
 	# avoids some bugs with serial
 	time.sleep(0.5)
@@ -42,7 +63,7 @@ def main(source, port, real_world):
 	upper = array([x + 20 for x in real_world.object_color])
 	lower = array([x - 20 for x in real_world.object_color])
 
-	ball = Ball(source, (lower, upper), max_retries=1000, debug=True)
+	ball = Ball(source, (lower, upper), max_retries=1000, debug=debug)
 	ball.start_positionning()
 	rail_origin = real_world.dist_origin_rails
 
@@ -135,46 +156,37 @@ def main(source, port, real_world):
 
 
 ################################################################################
-#                              CLI INTERFACE                                   #
+#                                    TESTS                                     #
 ################################################################################
-parser = argparse.ArgumentParser()
-parser.add_argument(
-	'--source',
-	help="""Specifies the video source to use with opencv, can be a path to a 
-			video file or the index of the camera"""
-)
-parser.add_argument(
-	'--port',
-	help='Specifies the port to use to connect to the arduino'
-)
-parser.add_argument(
-	'--config-distances', 
-	help='Enter the distances configuration menu',
-	action='store_true')
-parser.add_argument(
-	'--config-color',
-	help='Enter the ball color configuration menu',
-	action='store_true'
-)
+def run_tests(source, port, realworld, debug):
+	clear_cmd()
+	print('TESTS UTILITY')
+	print()
+	print()
 
-args = parser.parse_args()
-source = 0
-port = 'COM0'
-real_world = RealWorld()
+	tests = list_tests()
+	nb_tests = len(tests)
 
-if args.source:
-	if args.source.isnumeric():
-		source = int(args.source)
-
-if args.port:
-	if 'COM' in args.port and args.port.replace('COM', '').isnumeric():
-		port = args.port
+	print('Available tests:')
+	for i, test in enumerate(tests):
+		print('\t[{}] '.format(i), test.__name__)
+	
+	answer = input(
+		'Execute test (you can enter one or more, coma separated) id : '
+	)
+	choices = list(map(int, answer.split(',')))
+	
+	for choice in choices:
+		if choice in range(nb_tests):
+			tests[choice]()
+	
 
 
 ################################################################################
 #                               DISTANCES CONFIG                               #
 ################################################################################
-if args.config_distances:
+def config_distances(source, real_world, debug):
+	clear_cmd()
 	print('DISTANCES CONFIG')
 	capture = cv2.VideoCapture(source)
 
@@ -205,13 +217,13 @@ if args.config_distances:
 	img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 	print(real_world.config_distances(img, w, h), 'px/m')
 	real_world.save()
-	exit()
 
 
 ################################################################################
-#                                 COLOR CONFIG                                 #
+#                                 CONFIG COLOR                                 #
 ################################################################################
-if args.config_color:
+def config_color(source, realworld, debug):
+	clear_cmd()
 	print('COLOR CONFIG')
 	capture = cv2.VideoCapture(source)
 
@@ -246,11 +258,77 @@ if args.config_color:
 	
 	print(real_world.config_colors(rgb_frame, square_size))
 	real_world.save()
-	exit()
 
 
 ################################################################################
-#                                RUN MAIN LOOP                                 #
+#                              CLI INTERFACE                                   #
 ################################################################################
 if __name__ == '__main__':
-	main(source, port, real_world)
+	parser = argparse.ArgumentParser()
+
+	parser.add_argument(
+		'mode',
+		help="""Select what you want to do : test or play
+				Authorized values:
+					- run (R)
+					- test (T)""",
+		type=str
+	)
+
+	parser.add_argument(
+		'--source',
+		help="""Specifies the video source to use with opencv, can be a path to a 
+				video file or the index of the camera"""
+	)
+	parser.add_argument(
+		'--port',
+		help='Specifies the port to use to connect to the arduino'
+	)
+	parser.add_argument(
+		'--config-distances', 
+		help='Enter the distances configuration menu',
+		action='store_true')
+	parser.add_argument(
+		'--config-color',
+		help='Enter the ball color configuration menu',
+		action='store_true'
+	)
+	parser.add_argument(
+		'--debug',
+		help='Switch debug mode on /!\\ Verbose /!\\',
+		action='store_true'
+	)
+
+	args = parser.parse_args()
+	source = 0
+	port = 'COM0'
+	debug = False
+	real_world = RealWorld()
+
+	if args.debug:
+		debug = True
+
+	if args.source:
+		if args.source.isnumeric():
+			source = int(args.source)
+		else:
+			source = str(args.source)
+
+	if args.port:
+		if 'COM' in args.port and args.port.replace('COM', '').isnumeric():
+			port = args.port
+
+	if args.config_distances:
+		config_distances(source, real_world, debug)
+
+	if args.config_color:
+		config_color(source, real_world, debug)
+	
+	if args.mode in ['run', 'R']:
+		main(source, port, real_world, debug)
+	elif args.mode in ['test', 'T']:
+		run_tests(source, port, real_world, debug)
+	else:
+		raise ValueError(
+			'The chosen mode must be an authorized one, type --help for help'
+		)

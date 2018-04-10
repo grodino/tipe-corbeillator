@@ -8,66 +8,15 @@ from matplotlib import pyplot as pl
 from tracking.path import Path
 from tracking.ball import Ball, display_info
 
+from tests.utils import amplitude
+from tests.utils import constraint
+from tests.utils import sample_time
+
 from actuators.motor import Motor
 from physics.models import free_fall
 from config.environment import RealWorld
 from tests.experimenting import Experiment
 
-
-def constraint(val, a, b):
-    if val < a:
-        return a
-    elif val > b:
-        return b
-    
-    return val
-
-
-def sample_time(times):
-    """
-    Returns the mean sample time of the array of time instants given
-    
-    params:
-        - times : array of instants
-    """
-
-    n = len(times)
-    diffs = [times[i+1] - times[i] for i in range(n - 1)]
-
-    return sum(diffs)/len(diffs)
-
-
-def amplitude(times, signal, period):
-    """
-    Computes the mean amplitude of a periodic signal
-
-    params:
-        - times: instants when the measures were taken
-        - signal: values of the measure
-        - period: period of the signal
-    """
-
-    n = len(times)
-    if not len(signal) == len(times):
-        raise ValueError(
-            'signal and times must have the same length (a measure for each time)'
-        )
-
-    points = []
-    mean_sum = 0
-    current_max = 0
-    i = 0
-    count = 0
-
-    for i in range(n):
-        if times[i] < (count + 1)*period:
-            current_max = max(current_max, abs(signal[i]))
-        else:
-            mean_sum += current_max
-            current_max = 0
-            count += 1
-    
-    return mean_sum/count
 
 ################################################################################
 #                        OPEN LOOP MOTOR DRIVING TEST                          #
@@ -80,7 +29,7 @@ def open_loop_motor_test():
     motor = Motor(
         arduino_console, 
         max_speed=real_world.motor_max_speed,
-        debug=False
+        debug=True
     )
     # avoids some bugs with serial
     time.sleep(1)
@@ -91,8 +40,8 @@ def open_loop_motor_test():
     # MEASURES #
     ############
     START_FREQ = 0.05 # Hz
-    END_FREQ = 1 # Hz
-    NB_POINTS = 15
+    END_FREQ = 50 # Hz
+    NB_POINTS = 10
 
     SINE_AMPLITUDE = 255 # pwm
     EXP_DURATION = 15 # s
@@ -133,6 +82,7 @@ def open_loop_motor_test():
 
         results.append({
             "order_freq": sine_freq,
+            "order_amplitude": SINE_AMPLITUDE,
             "times": times,
             "speed_orders": consignes,
             "speed_measures": speed_measures,
@@ -326,9 +276,9 @@ def bode_data_analysis():
     """
 
     real_world = RealWorld()
-    experiment = Experiment.from_id(5, real_world.data_folder)
+    experiment = Experiment.from_id(9, real_world.data_folder)
     n_experiments = len(experiment.data['entree_sinus']['measures'])
-    amplitudes = []
+    gains = []
     freqs = []
     
     # fig, axes = pl.subplots(n_experiments)
@@ -343,31 +293,37 @@ def bode_data_analysis():
         times = np.array(
             list(map(float, experiment.data['entree_sinus']['measures'][i]['times']))
         )
-        freq = float(experiment.data['entree_sinus']['measures'][i]['order_freq'])
+        order_freq = float(experiment.data['entree_sinus']['measures'][i]['order_freq'])
+        #order_amplitude = float(experiment.data['entree_sinus']['measures'][i]['order_amplitude'])
+        order_amplitude = 1
 
         pos_spectrum = np.fft.rfft(pos_measures)
         speed_spectrum = np.fft.rfft(speed_measures)
         freq_range = np.fft.rfftfreq(times.size, sample_time(times))
 
-        amplitudes.append(amplitude(
+        gains.append(amplitude(
             times, 
             speed_measures, 
-            1/freq
-        ))
-        freqs.append(freq)
+            1/order_freq
+        )/order_amplitude)
+        freqs.append(order_freq)
 
     freqs = np.array(freqs)
-    amplitudes = np.array(amplitudes)
+    gains = np.array(gains)
     pl.semilogx(
         freqs,
-        20*np.log10(amplitudes/)
+        20*np.log10(gains)
     )
     pl.grid(True, color='0.7', linestyle='-', which='both', axis='both')
     pl.show()
     
 
-if __name__ == '__main__':
-    #tracking_time_test()
-    #trajectory_anticipation_test()
-    open_loop_motor_test()
-    #bode_data_analysis()
+TESTS_LIST = [
+    open_loop_motor_test,
+    tracking_time_test,
+    trajectory_anticipation_test,
+    bode_data_analysis
+]
+
+def list_tests():
+    return TESTS_LIST
