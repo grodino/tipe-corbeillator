@@ -1,5 +1,11 @@
 [
     {
+        "name": "data_folder",
+        "unit": "None",
+        "description": "path to the data folder used to store experiments",
+        "value": "data/"
+    },
+    {
         "name": "object_color",
         "unit": "RGB",
         "description": "Color of the followed object",

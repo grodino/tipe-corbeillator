@@ -6,10 +6,12 @@ import numpy as np
 from matplotlib import pyplot as pl
 
 from tracking.path import Path
+from tracking.ball import Ball, display_info
+
 from actuators.motor import Motor
 from physics.models import free_fall
 from config.environment import RealWorld
-from tracking.ball import Ball, display_info
+from tests.experimenting import Experiment
 
 
 def constraint(val, a, b):
@@ -35,12 +37,45 @@ def sample_time(times):
     return sum(diffs)/len(diffs)
 
 
-################################
-# OPEN LOOP MOTOR DRIVING TEST #
-################################
+def amplitude(times, signal, period):
+    """
+    Computes the mean amplitude of a periodic signal
+
+    params:
+        - times: instants when the measures were taken
+        - signal: values of the measure
+        - period: period of the signal
+    """
+
+    n = len(times)
+    if not len(signal) == len(times):
+        raise ValueError(
+            'signal and times must have the same length (a measure for each time)'
+        )
+
+    points = []
+    mean_sum = 0
+    current_max = 0
+    i = 0
+    count = 0
+
+    for i in range(n):
+        if times[i] < (count + 1)*period:
+            current_max = max(current_max, abs(signal[i]))
+        else:
+            mean_sum += current_max
+            current_max = 0
+            count += 1
+    
+    return mean_sum/count
+
+################################################################################
+#                        OPEN LOOP MOTOR DRIVING TEST                          #
+################################################################################
 def open_loop_motor_test():
     real_world = RealWorld()
     arduino_console = serial.Serial('COM6', 230400, timeout=1, write_timeout=2)
+    experiment = Experiment.new(real_world.data_folder)
 
     motor = Motor(
         arduino_console, 
@@ -55,13 +90,21 @@ def open_loop_motor_test():
     ############
     # MEASURES #
     ############
-    sine_freq = 0.1 # Hz
-    sine_amplitude = 255 # pwm
-    exp_duration = 15 # s
+    START_FREQ = 0.05 # Hz
+    END_FREQ = 1 # Hz
+    NB_POINTS = 15
 
+    SINE_AMPLITUDE = 255 # pwm
+    EXP_DURATION = 15 # s
+
+    exp_freqs = np.geomspace(
+        START_FREQ,
+        END_FREQ,
+        NB_POINTS
+    )
     results = []
 
-    for i in range(8):
+    for sine_freq in exp_freqs:
         sine_freq += 0.1
 
         speed_measures = []
@@ -72,12 +115,12 @@ def open_loop_motor_test():
         t_start = time.clock()
         t = t_start
         
-        while t - t_start < exp_duration:
+        while t - t_start < EXP_DURATION:
             times.append(t - t_start)
             speed_measures.append(motor.speed)
             pos_measures.append(motor.position)
             
-            order = int(sine_amplitude*np.sin(2*np.pi*sine_freq*(t - t_start)))
+            order = int(SINE_AMPLITUDE*np.sin(2*np.pi*sine_freq*(t - t_start)))
             motor.speed = order
             consignes.append(order)
             t = time.clock()
@@ -91,6 +134,7 @@ def open_loop_motor_test():
         results.append({
             "order_freq": sine_freq,
             "times": times,
+            "speed_orders": consignes,
             "speed_measures": speed_measures,
             "pos_measures": pos_measures
         })
@@ -98,18 +142,19 @@ def open_loop_motor_test():
     ############
     # ANALYSIS #
     ############
-
+    experiment.add_data(['entree_sinus'], {'measures': results})
+    experiment.save()
     n_experiments = len(results)
 
     # plot all the experiments measures
     fig, axes = pl.subplots(n_experiments)
 
     for i in range(n_experiments):
-        axes[i].plot(results[i]['times'], results[i]['pos_measures'])
+        axes[i].plot(results[i]['times'], results[i]['pos_measures'], color='r')
         axes[i].legend(['position mesurée (inc) '])
         
         ax2 = axes[i].twinx()
-        ax2.plot(results[i]['times'], results[i]['speed_measures'])
+        ax2.plot(results[i]['times'], results[i]['speed_measures'], color='b')
         ax2.legend(['vitesse mesurée (inc/ms)'])
     
     # ax1.semilogx(
@@ -141,9 +186,9 @@ def open_loop_motor_test():
     pl.show()
 
 
-######################
-# TRACKING TIME TEST #
-######################
+################################################################################
+#                            TRACKING TIME TEST                                #
+################################################################################
 def tracking_time_test():
     real_world = RealWorld()
     color_range = real_world.color_range
@@ -200,9 +245,9 @@ def tracking_time_test():
             break
     
 
-################################
-# TRAJECTORY ANTICIPATION TEST #
-################################
+################################################################################
+#                          TRAJECTORY ANTICIPATION TEST                        #
+################################################################################
 def trajectory_anticipation_test():
     real_world = RealWorld()
     color_range = real_world.color_range
@@ -271,7 +316,58 @@ def trajectory_anticipation_test():
     # pl.legend(['position']+[str(i) for i in range(len(models))])
     pl.show()
 
+
+################################################################################
+#                               BODE DATA ANALYSIS                             #
+################################################################################
+def bode_data_analysis():
+    """
+    Takes the data stored in the experiments and draws a bode diagram
+    """
+
+    real_world = RealWorld()
+    experiment = Experiment.from_id(5, real_world.data_folder)
+    n_experiments = len(experiment.data['entree_sinus']['measures'])
+    amplitudes = []
+    freqs = []
+    
+    # fig, axes = pl.subplots(n_experiments)
+
+    for i in range(n_experiments):
+        pos_measures = np.array(
+            list(map(float, experiment.data['entree_sinus']['measures'][i]['pos_measures']))
+        )
+        speed_measures = np.array(
+            list(map(float, experiment.data['entree_sinus']['measures'][i]['speed_measures']))
+        )
+        times = np.array(
+            list(map(float, experiment.data['entree_sinus']['measures'][i]['times']))
+        )
+        freq = float(experiment.data['entree_sinus']['measures'][i]['order_freq'])
+
+        pos_spectrum = np.fft.rfft(pos_measures)
+        speed_spectrum = np.fft.rfft(speed_measures)
+        freq_range = np.fft.rfftfreq(times.size, sample_time(times))
+
+        amplitudes.append(amplitude(
+            times, 
+            speed_measures, 
+            1/freq
+        ))
+        freqs.append(freq)
+
+    freqs = np.array(freqs)
+    amplitudes = np.array(amplitudes)
+    pl.semilogx(
+        freqs,
+        20*np.log10(amplitudes/)
+    )
+    pl.grid(True, color='0.7', linestyle='-', which='both', axis='both')
+    pl.show()
+    
+
 if __name__ == '__main__':
     #tracking_time_test()
     #trajectory_anticipation_test()
     open_loop_motor_test()
+    #bode_data_analysis()

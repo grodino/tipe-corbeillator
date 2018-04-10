@@ -146,7 +146,7 @@ class Experiment(object):
         else:
             raise ValueError(
                 'The key "{}" you are trying to add already exists'.format(keys[n-1])
-                )
+            )
 
     def save(self):
         """

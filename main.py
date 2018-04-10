@@ -134,6 +134,9 @@ def main(source, port, real_world):
 	ball.stop_positionning()
 
 
+################################################################################
+#                              CLI INTERFACE                                   #
+################################################################################
 parser = argparse.ArgumentParser()
 parser.add_argument(
 	'--source',
@@ -167,10 +170,10 @@ if args.port:
 	if 'COM' in args.port and args.port.replace('COM', '').isnumeric():
 		port = args.port
 
-####################
-# DISTANCES CONFIG #
-####################
 
+################################################################################
+#                               DISTANCES CONFIG                               #
+################################################################################
 if args.config_distances:
 	print('DISTANCES CONFIG')
 	capture = cv2.VideoCapture(source)
@@ -205,9 +208,9 @@ if args.config_distances:
 	exit()
 
 
-##################
-#  COLOR CONFIG  #
-##################
+################################################################################
+#                                 COLOR CONFIG                                 #
+################################################################################
 if args.config_color:
 	print('COLOR CONFIG')
 	capture = cv2.VideoCapture(source)
@@ -232,7 +235,6 @@ if args.config_color:
 		cv2.circle(frame, (width//2, height//2), 3, (0, 255, 0))
 		cv2.rectangle(frame, (x, y), (x + square_size, y + square_size), 255, 2)
 
-
 		cv2.imshow('CONFIG', frame)
 
 		if cv2.waitKey(1) & 0xFF == ord('d'):
@@ -247,8 +249,8 @@ if args.config_color:
 	exit()
 
 
-#################
-# RUN MAIN LOOP #
-#################
+################################################################################
+#                                RUN MAIN LOOP                                 #
+################################################################################
 if __name__ == '__main__':
 	main(source, port, real_world)
