@@ -16,6 +16,12 @@
         ]
     },
     {
+        "name": "rail_length",
+        "unit": "m",
+        "description": "Distance between the center of the basket in its two extreme positions",
+        "value": 0.555
+    },
+    {
         "name": "dist_origin_rails",
         "unit": "m",
         "description": "Distance between the origin of the camera window and the origin of the rails",
@@ -28,27 +34,21 @@
         "value": 100
     },
     {
-        "name": "motor_max_speed",
-        "unit": "rad/s",
-        "description": "Maximum angular speed of the motor",
-        "value": 16.7552
-    },
-    {
         "name": "px_m_ratio",
         "unit": "px/m",
         "description": "Number of pixels per meter",
         "value": 483.30928330928333
     },
     {
-        "name": "encoder_ratio",
-        "unit": "top/tr",
-        "description": "Number of tops per revolution of the encoder",
-        "value": 400
+        "name": "inc_m_ratio",
+        "unit": "inc/m",
+        "description": "Number of coder increments per translation meter of the basket",
+        "value": 63841.441441441435
     },
     {
-        "name": "reduction_ratio",
-        "unit": "1",
-        "description": "Number of crank revolutions per motor revolution",
-        "value": 0.02
+        "name": "pwm_incs_ratio",
+        "unit": "pwm/(inc/s)",
+        "description": "PWM value relative to speed in inc per second",
+        "value": 12.360400186133086
     }
 ]

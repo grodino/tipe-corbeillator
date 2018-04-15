@@ -59,6 +59,7 @@ def amplitude(times, signal, period):
     
     return mean_sum/count
 
+
 def response_time(times, signal, percentage=0.05, nb_points_mean=10):
     """
     Returns response time, lower and upper boundaries, defined by the first 
@@ -67,7 +68,7 @@ def response_time(times, signal, percentage=0.05, nb_points_mean=10):
     params:
         - times: array of instants
         - signal: array of scalar values, must be the same dimension as times
-        - percentage: float in ]0;1[
+        - percentage: float in [0;1]
         - nb_points_mean: int that sets the number of points used to calculate 
             the mean end value
     """
@@ -82,6 +83,27 @@ def response_time(times, signal, percentage=0.05, nb_points_mean=10):
     for i in range(n):
         if upper <= signal[i] or signal[i] <= lower:
             min_t = times[i]
-            print(min_t, signal[i])
     
     return min_t, lower, upper
+
+
+def ask_context():
+    print('\n\n')
+    print('CONTEXT INFORMATION')
+
+    voltage = float(input('Voltage given to chopper controller in V : '))
+    print()
+
+    basket_mounted = {
+        'Y': True, 
+        'N': False
+    }[input('Basket mounted (Y or N) : ').upper()]
+    print()
+
+    remarks = input('Any other remarks : ')
+
+    return {
+        'voltage' : voltage,
+        'basket_mounted': basket_mounted,
+        'remarks': remarks
+    }

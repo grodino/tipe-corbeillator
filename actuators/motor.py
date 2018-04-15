@@ -13,8 +13,6 @@ from actuators.interface import SerialActuator
 class Motor(SerialActuator):
 	pwm = 0
 	rotation = 0 # 0: ANTICLOCKWISE, 1: CLOCKWISE
-	max_speed = 200 # rad/s
-	max_acceleration = 200 # rad/s^2
 	pos_digit_number = 6 # number of digits in the pos order
 
 	_read_thread = None
@@ -24,21 +22,16 @@ class Motor(SerialActuator):
 		'speed': 0
 	}
 	
-	def __init__(self, serial_console, max_speed=200, max_acceleration=200, pos_digit_number=6, debug=False):
+	def __init__(self, serial_console, pos_digit_number=6, debug=False):
 		"""
 		params:
 			- serial_console: the serial.Serial object used to communicate
-			- max_speed: the maximum rotation speed of the motor in rad/s
-			- max_acceleration: the maximum rotation acceleration of the motor
-				in rad/s^2
 			- pos_digit_number : number of digits (not including the minus sign) in the position value
 			- debug: if true, the object becomes verbose
 		"""
 
 		self._pwm = 0
 		self._rotation = 0
-		self.max_speed = max_speed
-		self.max_acceleration = max_acceleration
 		self._prev_speed_measure = (0, time.clock())
 		self.pos_digit_number = pos_digit_number
 
@@ -56,6 +49,7 @@ class Motor(SerialActuator):
 
 		success = False
 
+		self.exec(b'7') # Code to get arduino info
 		value = self.get_value()
 
 		if self._debug:
@@ -104,7 +98,6 @@ class Motor(SerialActuator):
 
 		if not type(value) in [int, float]:
 			raise ValueError('The speed must be an int or a float, not a ' + str(type(value)))
-
 
 		pwm = min(abs(value), 255)
 

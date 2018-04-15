@@ -10,6 +10,7 @@ from tracking.ball import Ball, display_info
 from tests.utils import amplitude
 from tests.utils import constraint
 from tests.utils import sample_time
+from tests.utils import ask_context
 from tests.utils import response_time
 
 from actuators.motor import Motor
@@ -21,20 +22,20 @@ from tests.experimenting import Experiment
 ################################################################################
 #                             OPEN LOOP SINE INPUT                             #
 ################################################################################
-def open_loop_sine_input():
-    real_world = RealWorld()
-    arduino_console = serial.Serial('COM6', 230400, timeout=1, write_timeout=2)
+def open_loop_sine_input(source, port, real_world, debug):
+    arduino_console = serial.Serial(port, 230400, timeout=1, write_timeout=2)
     experiment = Experiment.new(real_world.data_folder)
 
     motor = Motor(
-        arduino_console, 
-        max_speed=real_world.motor_max_speed,
-        debug=True
+        arduino_console,
+        debug=debug
     )
     # avoids some bugs with serial
     time.sleep(1)
-
-    print(motor.position)
+    context = ask_context()
+    experiment.add_data(['context'], context)
+    print('Move the basket next to the motor (the origin)')
+    input('Ready ?')
 
     ############
     # MEASURES #
@@ -45,6 +46,12 @@ def open_loop_sine_input():
 
     SINE_AMPLITUDE = 255 # pwm
     EXP_DURATION = 15 # s
+    CENTER = int(
+        (real_world.rail_length/2)*real_world.inc_m_ratio
+    )# inc
+
+    motor.position = CENTER
+    time.sleep(2)
 
     exp_freqs = np.geomspace(
         START_FREQ,
@@ -54,6 +61,8 @@ def open_loop_sine_input():
     results = []
 
     for sine_freq in exp_freqs:
+        motor.position = CENTER
+        time.sleep(2)
         sine_freq += 0.1
 
         speed_measures = []
@@ -68,10 +77,20 @@ def open_loop_sine_input():
             times.append(t - t_start)
             speed_measures.append(motor.speed)
             pos_measures.append(motor.position)
-            
+
             order = int(SINE_AMPLITUDE*np.sin(2*np.pi*sine_freq*(t - t_start)))
-            motor.speed = order
-            consignes.append(order)
+
+            # limit the amplitude of the movement
+            if pos_measures[-1] <= 100 and order <= 0:
+                motor.speed = 0
+                consignes.append(0)
+            elif pos_measures[-1] >= 2*CENTER - 100 and order >= 0:
+                motor.speed = 0
+                consignes.append(0)
+            else:
+                motor.speed = order
+                consignes.append(order)
+
             t = time.clock()
         
         # pos_measures = np.array(pos_measures)
@@ -139,18 +158,18 @@ def open_loop_sine_input():
 ################################################################################
 #                             OPEN LOOP STEP INPUT                             #
 ################################################################################
-def open_loop_step_input():
-    real_world = RealWorld()
-    arduino_console = serial.Serial('COM6', 230400, timeout=1, write_timeout=2)
+def open_loop_step_input(source, port, real_world, debug):
+    arduino_console = serial.Serial(port, 230400, timeout=1, write_timeout=2)
     experiment = Experiment.new(real_world.data_folder)
 
     motor = Motor(
-        arduino_console, 
-        max_speed=real_world.motor_max_speed,
-        debug=True
+        arduino_console,
+        debug=debug
     )
     # avoids some bugs with serial
     time.sleep(1)
+    context = ask_context()
+    experiment.add_data(['context'], context)
 
     EXP_DURATION = 1.7 # s
     SPEED_VALUE = 255 # pwm
@@ -187,13 +206,12 @@ def open_loop_step_input():
 ################################################################################
 #                            TRACKING TIME TEST                                #
 ################################################################################
-def tracking_time_test():
+def tracking_time_test(source, port, real_world, debug):
     import cv2
     
-    real_world = RealWorld()
     color_range = real_world.color_range
 
-    ball = Ball(0, color_range, max_retries=500, debug=True)
+    ball = Ball(0, color_range, max_retries=500, debug=debug)
 
     ball.start_positionning()
     i = 0
@@ -248,13 +266,12 @@ def tracking_time_test():
 ################################################################################
 #                          TRAJECTORY ANTICIPATION TEST                        #
 ################################################################################
-def trajectory_anticipation_test():
+def trajectory_anticipation_test(source, port, real_world, debug):
     import cv2
 
-    real_world = RealWorld()
     color_range = real_world.color_range
 
-    ball = Ball(0, color_range, max_retries=100, debug=True)
+    ball = Ball(0, color_range, max_retries=100, debug=debug)
 
     ball.start_positionning()
     i = 0
@@ -322,15 +339,14 @@ def trajectory_anticipation_test():
 ################################################################################
 #                               BODE DATA ANALYSIS                             #
 ################################################################################
-def bode_data_analysis():
+def bode_data_analysis(source, port, real_world, debug):
     """
     Takes the data stored in the experiments and draws a bode diagram
     """
 
-    real_world = RealWorld()
     experiment = Experiment.from_id(9, real_world.data_folder)
     n_experiments = len(experiment.data['entree_sinus']['measures'])
-    gains = []
+    amplitudes = []
     freqs = []
     
     # fig, axes = pl.subplots(n_experiments)
@@ -352,20 +368,20 @@ def bode_data_analysis():
         speed_spectrum = np.fft.rfft(speed_measures)
         freq_range = np.fft.rfftfreq(times.size, sample_time(times))
 
-        gains.append(amplitude(
+        amplitudes.append(amplitude(
             times, 
             speed_measures, 
             1/order_freq
-        )/order_amplitude)
+        ))
         freqs.append(order_freq)
 
     freqs = np.array(freqs)
-    gains = np.array(gains)
+    amplitudes = np.array(amplitudes)*real_world.pwm_incs_ratio # convert in pwm
 
     pl.title('Gain en vitesse de la corbeille en fonction de la fréquence')
     pl.semilogx(
         freqs,
-        20*np.log10(gains)
+        20*np.log10(amplitudes/order_amplitude)
     )
     pl.xlabel('Fréquence (Hz)')
     pl.ylabel('Gain (dB)')
@@ -376,8 +392,7 @@ def bode_data_analysis():
 ################################################################################
 #                            STEP INPUT DATA ANALYSIS                          #
 ################################################################################
-def step_input_data_analysis():
-    real_world = RealWorld()
+def step_input_data_analysis(source, port, real_world, debug):
     experiment = Experiment.from_id(17, real_world.data_folder)
     
     speed_order = experiment.data['entree_echellon']['speed_order']

@@ -29,6 +29,8 @@ class SerialActuator(object):
 			self._console.write(b'1')
 			time.sleep(0.5)
 		
+		self._console.reset_input_buffer()
+		
 		time.sleep(3) # Avoid bugs
 
 		if self._debug:
@@ -83,7 +85,6 @@ class SerialActuator(object):
 		Returns the first value in the buffer
 		"""
 
-		self._console.reset_input_buffer()
 		read_value = self._console.readline()
 
 		if self._debug:
