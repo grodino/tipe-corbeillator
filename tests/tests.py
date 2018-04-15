@@ -1,6 +1,5 @@
 import time
 
-import cv2
 import serial
 import numpy as np
 from matplotlib import pyplot as pl
@@ -11,6 +10,7 @@ from tracking.ball import Ball, display_info
 from tests.utils import amplitude
 from tests.utils import constraint
 from tests.utils import sample_time
+from tests.utils import response_time
 
 from actuators.motor import Motor
 from physics.models import free_fall
@@ -19,9 +19,9 @@ from tests.experimenting import Experiment
 
 
 ################################################################################
-#                        OPEN LOOP MOTOR DRIVING TEST                          #
+#                             OPEN LOOP SINE INPUT                             #
 ################################################################################
-def open_loop_motor_test():
+def open_loop_sine_input():
     real_world = RealWorld()
     arduino_console = serial.Serial('COM6', 230400, timeout=1, write_timeout=2)
     experiment = Experiment.new(real_world.data_folder)
@@ -41,7 +41,7 @@ def open_loop_motor_test():
     ############
     START_FREQ = 0.05 # Hz
     END_FREQ = 50 # Hz
-    NB_POINTS = 10
+    NB_POINTS = 15
 
     SINE_AMPLITUDE = 255 # pwm
     EXP_DURATION = 15 # s
@@ -137,9 +137,59 @@ def open_loop_motor_test():
 
 
 ################################################################################
+#                             OPEN LOOP STEP INPUT                             #
+################################################################################
+def open_loop_step_input():
+    real_world = RealWorld()
+    arduino_console = serial.Serial('COM6', 230400, timeout=1, write_timeout=2)
+    experiment = Experiment.new(real_world.data_folder)
+
+    motor = Motor(
+        arduino_console, 
+        max_speed=real_world.motor_max_speed,
+        debug=True
+    )
+    # avoids some bugs with serial
+    time.sleep(1)
+
+    EXP_DURATION = 1.7 # s
+    SPEED_VALUE = 255 # pwm
+
+    positions = []
+    speeds = []
+    times = []
+
+    t_start = time.clock()
+    t = t_start
+
+    while t - t_start < EXP_DURATION:
+        motor.speed = SPEED_VALUE
+        times.append(t - t_start)
+        positions.append(motor.position)
+        speeds.append(motor.speed)
+        t = time.clock()
+    
+    motor.speed = 0
+    
+    experiment.add_data(
+        ['entree_echellon'],
+        {
+            'name': 'Réponse temporelle du système en boucle ouverte à une entrée en echellon',
+            'speed_order': SPEED_VALUE,
+            'times': times,
+            'speeds': speeds,
+            'positions': positions
+        }
+    )
+    experiment.save()
+        
+
+################################################################################
 #                            TRACKING TIME TEST                                #
 ################################################################################
 def tracking_time_test():
+    import cv2
+    
     real_world = RealWorld()
     color_range = real_world.color_range
 
@@ -199,6 +249,8 @@ def tracking_time_test():
 #                          TRAJECTORY ANTICIPATION TEST                        #
 ################################################################################
 def trajectory_anticipation_test():
+    import cv2
+
     real_world = RealWorld()
     color_range = real_world.color_range
 
@@ -294,8 +346,7 @@ def bode_data_analysis():
             list(map(float, experiment.data['entree_sinus']['measures'][i]['times']))
         )
         order_freq = float(experiment.data['entree_sinus']['measures'][i]['order_freq'])
-        #order_amplitude = float(experiment.data['entree_sinus']['measures'][i]['order_amplitude'])
-        order_amplitude = 1
+        order_amplitude = float(experiment.data['entree_sinus']['measures'][i]['order_amplitude'])
 
         pos_spectrum = np.fft.rfft(pos_measures)
         speed_spectrum = np.fft.rfft(speed_measures)
@@ -310,19 +361,59 @@ def bode_data_analysis():
 
     freqs = np.array(freqs)
     gains = np.array(gains)
+
+    pl.title('Gain en vitesse de la corbeille en fonction de la fréquence')
     pl.semilogx(
         freqs,
         20*np.log10(gains)
     )
+    pl.xlabel('Fréquence (Hz)')
+    pl.ylabel('Gain (dB)')
     pl.grid(True, color='0.7', linestyle='-', which='both', axis='both')
     pl.show()
+
+
+################################################################################
+#                            STEP INPUT DATA ANALYSIS                          #
+################################################################################
+def step_input_data_analysis():
+    real_world = RealWorld()
+    experiment = Experiment.from_id(17, real_world.data_folder)
     
+    speed_order = experiment.data['entree_echellon']['speed_order']
+    times = experiment.data['entree_echellon']['times']
+    speeds = experiment.data['entree_echellon']['speeds']
+    positions = experiment.data['entree_echellon']['positions']
+
+    response_t, lower, upper = response_time(times, speeds)
+
+    fig, ax1 = pl.subplots()
+    pl.title('Réponse à un échellon de vitesse')
+    
+    ax1.plot(times, positions, color='red')
+    ax1.set_ylabel('position (inc)')
+
+    ax2 = ax1.twinx()
+    ax2.plot(times, speeds, color='blue')
+    ax2.set_ylabel('vitesse (inc/s)')
+
+    ax2.axhline(y=lower, color='0.7', linestyle='--', linewidth=1)
+    ax2.axhline(y=upper, color='0.7', linestyle='--', linewidth=1)
+    ax2.text(0, upper, '$' + str(upper)[:4] + ' +5\%$')
+    ax2.text(0, lower, '$' + str(lower)[:4] + ' -5\%$')
+    
+    ax2.axvline(x=response_t, color='0.7', linestyle='--', linewidth=1)
+    ax2.text(response_t, 0, '$t_{5\%}= '+ str(response_t)[:3]+' s$')
+
+    pl.show()
 
 TESTS_LIST = [
-    open_loop_motor_test,
+    open_loop_sine_input,
+    open_loop_step_input,
     tracking_time_test,
     trajectory_anticipation_test,
-    bode_data_analysis
+    bode_data_analysis,
+    step_input_data_analysis
 ]
 
 def list_tests():

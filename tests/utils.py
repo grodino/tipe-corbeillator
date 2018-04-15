@@ -58,3 +58,30 @@ def amplitude(times, signal, period):
     print('MEAN', mean_sum/count)
     
     return mean_sum/count
+
+def response_time(times, signal, percentage=0.05, nb_points_mean=10):
+    """
+    Returns response time, lower and upper boundaries, defined by the first 
+    instant from which the signal stays within end_value -+ percentage*end_value
+    
+    params:
+        - times: array of instants
+        - signal: array of scalar values, must be the same dimension as times
+        - percentage: float in ]0;1[
+        - nb_points_mean: int that sets the number of points used to calculate 
+            the mean end value
+    """
+
+    n = len(times)
+    end_value = sum(signal[n-nb_points_mean:])/(nb_points_mean)
+    lower = end_value*(1 - percentage)
+    upper = end_value*(1 + percentage)
+
+    min_t = times[0]
+
+    for i in range(n):
+        if upper <= signal[i] or signal[i] <= lower:
+            min_t = times[i]
+            print(min_t, signal[i])
+    
+    return min_t, lower, upper
