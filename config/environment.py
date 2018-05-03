@@ -62,7 +62,7 @@ class RealWorld(object):
         with open('config/config.json', 'w') as file:
             json.dump(self._config_data, file, indent=4)
 
-    def config_distances(self, image, real_w, real_h):
+    def config_distances(self, image, center, real_w, real_h):
         """
         Protocol:
             - The operator places a rectangle in landscape mode of a known height and width
@@ -76,10 +76,11 @@ class RealWorld(object):
         """
 
         # Blur the image in order not to have to much details
-        color = image[len(image)//2, len(image[0])//2]
+        x_center, y_center = center
+        color = image[y_center, x_center]
         unit_vect = np.array([1, 1, 1])
 
-        mask = cv2.inRange(image, color - 15*unit_vect, color + 15*unit_vect)
+        mask = cv2.inRange(image, color - 20*unit_vect, color + 20*unit_vect)
         mask = cv2.erode(mask, None, iterations=2)
 
         # find all the contours in the image
@@ -124,6 +125,7 @@ class RealWorld(object):
 
         cv2.rectangle(image, (x, y), (x + w, y + h), (255, 165, 0), 3)
         cv2.imshow('Shape Detection', image)
+        cv2.imshow('mask', mask)
 
         while 1:
             # WARNING ! DO NOT DELETE

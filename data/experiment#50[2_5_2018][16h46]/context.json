@@ -1,0 +1,5 @@
+{
+    "voltage": 22.0,
+    "basket_mounted": true,
+    "remarks": "Not full PWM (200 instead of 255), on the bode diagram, the strange gain after w0 could be explained by the loss of adherance after certain frequencies"
+}

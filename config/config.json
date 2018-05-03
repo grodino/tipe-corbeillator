@@ -10,22 +10,22 @@
         "unit": "RGB",
         "description": "Color of the followed object",
         "value": [
-            218,
-            54,
-            0
+            202,
+            78,
+            42
         ]
     },
     {
         "name": "rail_length",
         "unit": "m",
         "description": "Distance between the center of the basket in its two extreme positions",
-        "value": 0.555
+        "value": 0.527
     },
     {
         "name": "dist_origin_rails",
-        "unit": "m",
+        "unit": "px",
         "description": "Distance between the origin of the camera window and the origin of the rails",
-        "value": 0
+        "value": 632
     },
     {
         "name": "motor_max_acceleration",
@@ -37,18 +37,18 @@
         "name": "px_m_ratio",
         "unit": "px/m",
         "description": "Number of pixels per meter",
-        "value": 483.30928330928333
+        "value": 336.26868195476004
     },
     {
         "name": "inc_m_ratio",
         "unit": "inc/m",
         "description": "Number of coder increments per translation meter of the basket",
-        "value": 63841.441441441435
+        "value": 64483.87096774193
     },
     {
         "name": "pwm_incs_ratio",
         "unit": "pwm/(inc/s)",
         "description": "PWM value relative to speed in inc per second",
-        "value": 12.360400186133086
+        "value": 8.80701245415173
     }
 ]

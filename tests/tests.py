@@ -44,7 +44,7 @@ def open_loop_sine_input(source, port, real_world, debug):
     END_FREQ = 50 # Hz
     NB_POINTS = 15
 
-    SINE_AMPLITUDE = 255 # pwm
+    SINE_AMPLITUDE = 200 # pwm
     EXP_DURATION = 15 # s
     CENTER = int(
         (real_world.rail_length/2)*real_world.inc_m_ratio
@@ -62,7 +62,7 @@ def open_loop_sine_input(source, port, real_world, debug):
 
     for sine_freq in exp_freqs:
         motor.position = CENTER
-        time.sleep(2)
+        time.sleep(5)
         sine_freq += 0.1
 
         speed_measures = []
@@ -81,10 +81,10 @@ def open_loop_sine_input(source, port, real_world, debug):
             order = int(SINE_AMPLITUDE*np.sin(2*np.pi*sine_freq*(t - t_start)))
 
             # limit the amplitude of the movement
-            if pos_measures[-1] <= 100 and order <= 0:
+            if pos_measures[-1] <= 1500 and order <= 0:
                 motor.speed = 0
                 consignes.append(0)
-            elif pos_measures[-1] >= 2*CENTER - 100 and order >= 0:
+            elif pos_measures[-1] >= 2*CENTER - 1500 and order >= 0:
                 motor.speed = 0
                 consignes.append(0)
             else:
@@ -93,6 +93,7 @@ def open_loop_sine_input(source, port, real_world, debug):
 
             t = time.clock()
         
+        motor.speed = 0
         # pos_measures = np.array(pos_measures)
         # pos_spectrum = np.fft.rfft(pos_measures)
 
@@ -211,7 +212,7 @@ def tracking_time_test(source, port, real_world, debug):
     
     color_range = real_world.color_range
 
-    ball = Ball(0, color_range, max_retries=500, debug=debug)
+    ball = Ball(source, color_range, max_retries=500, debug=debug)
 
     ball.start_positionning()
     i = 0
@@ -223,12 +224,6 @@ def tracking_time_test(source, port, real_world, debug):
 
     # Wait for the ball to appear
     while not ball.is_in_range:
-        # frame = ball._last_frame
-        # frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        # cv2.imshow('frame', frame)
-
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #     break
         dt = time.clock() - t
         t = time.clock()
 
@@ -242,7 +237,7 @@ def tracking_time_test(source, port, real_world, debug):
         cv2.imshow('frame', frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            return
 
     print('Object found')
 
@@ -271,7 +266,7 @@ def trajectory_anticipation_test(source, port, real_world, debug):
 
     color_range = real_world.color_range
 
-    ball = Ball(0, color_range, max_retries=100, debug=debug)
+    ball = Ball(source, color_range, max_retries=100, debug=debug)
 
     ball.start_positionning()
     i = 0
@@ -280,10 +275,29 @@ def trajectory_anticipation_test(source, port, real_world, debug):
     x_falls = []
 
     t = time.clock()
+    bgr = cv2.cvtColor(ball._last_frame, cv2.COLOR_RGB2BGR)
+
+    height = len(bgr)
+    width = len(bgr[0])
+
+    x_rail_origin = int(real_world.dist_origin_rails)
+    line = np.array(
+           [[x_rail_origin, 0], [x_rail_origin, height - 1]], np.int32
+    ).reshape((-1,1,2))
 
     # Wait for the ball to appear
     while not ball.is_in_range:
-        pass
+        dt = time.clock() - t
+        t = time.clock()
+
+        bgr = cv2.cvtColor(ball._last_frame, cv2.COLOR_RGB2BGR)
+        
+        display_info(bgr, str(1/dt), color_range)
+        cv2.polylines(bgr,[line],False,(0, 0, 255))
+
+        cv2.imshow('camera', bgr)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            return
 
     positions.append(ball.position)
 
@@ -301,7 +315,7 @@ def trajectory_anticipation_test(source, port, real_world, debug):
         models.append(f)
         path = Path(f)
 
-        x_fall = path.falling_point(ball.window)
+        x_fall = path.falling_point(ball.window, ball.window['width']//2)
         x_falls.append((x_fall, time.clock()))
 
         frame = ball._last_frame
@@ -311,18 +325,51 @@ def trajectory_anticipation_test(source, port, real_world, debug):
         
         display_info(frame, fps, color_range)
 
-        cv2.imshow('frame', frame)
+        cv2.imshow('camera', frame)
         cv2.imshow('mask', ball._mask)
 
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    for i, x_fall in enumerate(x_falls):
+        cv2.circle(
+            bgr, 
+            (int(x_fall[0]), height//2), 
+            3, 
+            (int((i/len(x_falls))*255), 0, 0)
+        )
+
+    for position in positions:
+        cv2.circle(bgr, (position[0], height - position[1]), 3, (255, 0, 0))
+
+    n = len(models)
+
+    for i in range(0, n, 2):
+        f = models[i]
+
+        line = np.array(
+            [[x,int(height - f(x))] for x in range(0, width, int(width/50))], np.int32
+        ).reshape((-1,1,2))
+        
+        cv2.polylines(bgr,[line],False,(0, int(255*(i/n)), 0))
+
+    x_rail_origin = int(real_world.dist_origin_rails)
+    line = np.array(
+           [[x_rail_origin, 0], [x_rail_origin, height - 1]], np.int32
+        ).reshape((-1,1,2))
+    cv2.polylines(bgr,[line],False,(0, 0, 255))
+        
+    while 1:
+        cv2.imshow('camera', bgr)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     print("Number of positions:", len(positions))
     print(positions)
         
-    positions = np.array(positions)
-    X = positions[:,0]
-    Y = positions[:,1]
+    # positions = np.array(positions)
+    # X = positions[:,0]
+    # Y = positions[:,1]
 
     # for point in x_falls:
     # 	pl.plot(point[0], 0, 'ro')
@@ -330,10 +377,10 @@ def trajectory_anticipation_test(source, port, real_world, debug):
     # for model in models:
     #     pl.plot(X, [model(x) for x in X])
 
-    pl.plot(X, Y)
-    #pl.plot(X, [f(x) for x in X])
+    # pl.plot(X, Y)
+    # pl.plot(X, [f(x) for x in X])
     # pl.legend(['position']+[str(i) for i in range(len(models))])
-    pl.show()
+    # pl.show()
 
 
 ################################################################################
@@ -344,7 +391,8 @@ def bode_data_analysis(source, port, real_world, debug):
     Takes the data stored in the experiments and draws a bode diagram
     """
 
-    experiment = Experiment.from_id(9, real_world.data_folder)
+    exp_id = input('EXPRERIMENT ID : ')
+    experiment = Experiment.from_id(exp_id, real_world.data_folder)
     n_experiments = len(experiment.data['entree_sinus']['measures'])
     amplitudes = []
     freqs = []
@@ -393,6 +441,7 @@ def bode_data_analysis(source, port, real_world, debug):
 #                            STEP INPUT DATA ANALYSIS                          #
 ################################################################################
 def step_input_data_analysis(source, port, real_world, debug):
+    exp_id = int(input('EXPERIMENT ID : '))
     experiment = Experiment.from_id(17, real_world.data_folder)
     
     speed_order = experiment.data['entree_echellon']['speed_order']

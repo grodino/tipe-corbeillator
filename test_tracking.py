@@ -3,97 +3,85 @@ from time import clock
 import cv2
 from numpy import array
 
+from tracking.ball import Ball
+from tracking.ball import display_info
 from config.environment import RealWorld
 
-def detect(capture, color_range):
-    if not capture or not capture.isOpened():
-        raise ValueError('There is no opened video capture')
+def detect(color_range):
+    ball = Ball(1, color_range)
+    ball.start_positionning()
+    
+    t = clock()
 
-    ret, frame = capture.read()
+    while not ball.is_in_range:
+        dt = clock() - t
+        t = clock()
 
-    t_grabed = clock()
-    pos = (-1, -1, 0, t_grabed)
+        frame = ball._last_frame
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        fps = str(1/dt)
+        
+        display_info(frame, fps, color_range)
 
-    # Filter only the pixels in the right range of colors
-    mask = cv2.inRange(rgb, array(color_range[0]), array(color_range[1]))
-    mask = cv2.erode(mask, None, iterations=2)
+        cv2.imshow('frame', frame)
 
-    # find contours in the mask and initialize the current
-    # (x, y) center of the ball
-    cnts = cv2.findContours(
-        mask.copy(),
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
-    )[-2]
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            return
+    
+    pos = ball.positions[-1] + (t,)
 
-    if len(cnts) > 0:
-        # find the largest contour in the mask, then use
-        # it to compute the minimum enclosing circle and
-        # centroid
-        c = max(cnts, key=cv2.contourArea)
-        ((x, y), radius) = cv2.minEnclosingCircle(c)
-        M = cv2.moments(c)
-        center = None
-
-        if M["m00"] != 0 and M["m00"] != 0:
-            center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-        else:
-            return (-1, -1, 0, t_grabed)
-
-        if radius > 1:
-            # draw the circle and centroid on the frame,
-            # then update the list of tracked points
-            cv2.circle(frame, (int(x), int(y)), int(radius),
-                        (0, 255, 255), 2)
-            cv2.circle(frame, center, 5, (0, 0, 255), -1)
-
-            # Add the center to the drawing
-            try:
-                cv2.circle(frame, center, 2, (0, 255, 0), -1)
-                cv2.circle(frame, (0, 0), 2, (0, 255, 0), -1)
-            except:
-                print('OUCH')
-                pass
-
-        pos = (center[0], center[1], radius, clock())
-
-    cv2.imshow('frame', frame)
+    ball.stop_positionning()
 
     return pos
 
 
 def main():
     real_world = RealWorld()
-    capture = cv2.VideoCapture(1)
 
     color_range = real_world.color_range
 
-    x, y, r, t = detect(capture, color_range)
-    k = cv2.waitKey(60)
+    x, y, r, t = detect(color_range)
+    print(x,y,r,t)
 
-    while x == -1 and y == -1 and not(cv2.waitKey(1) & 0xFF == ord('d')) or r < 10:
-        x, y, r, t = detect(capture, color_range)
+    # while x == -1 and y == -1 and not(cv2.waitKey(1) & 0xFF == ord('d')) or r < 10:
+    #     print(x,y,r,t)
+    #     x, y, r, t = detect(color_range)
     
-    r = 50
-    track_window = (x, y, int(r) + 10, int(r) + 10)
+    capture = cv2.VideoCapture(1)
+
+    r = 100
+    track_window = (x - int(r), y - int(r), int(r), int(r))
+    x, y, w, h = track_window
     ret,frame = capture.read()
 
-    roi = frame[x:x+int(r),y:y+int(r)]
+    roi = frame[y:y+h, x:x+w]
     rgb_roi =  cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mask = cv2.inRange(rgb_roi, color_range[0], color_range[1])
+
+    while 1:
+        cv2.imshow('roi', roi)
+        cv2.imshow('mask', mask)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
     roi_hist = cv2.calcHist([rgb_roi],[0],mask,[180],[0,180])
+    print(roi_hist)
     cv2.normalize(roi_hist,roi_hist,0,255,cv2.NORM_MINMAX)
 
     # Setup the termination criteria, either 10 iteration or move by atleast 1 pt
     term_crit = ( cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1 )
 
+    last_t = clock()
+
     while(1):
         ret ,frame = capture.read()
+        t = clock()
+        dt = t - last_t
 
         if ret == True:
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             dst = cv2.calcBackProject([hsv],[0],roi_hist,[0,180],1)
 
             # apply meanshift to get the new location
@@ -101,8 +89,9 @@ def main():
 
             # Draw it on image
             x,y,w,h = track_window
-            img2 = cv2.rectangle(frame, (x,y), (x+w,y+h), 255,2)
-            cv2.imshow('frame',img2)
+            frame = cv2.rectangle(frame, (x,y), (x+w,y+h), 255,2)
+            display_info(frame, str(1/dt), color_range)
+            cv2.imshow('frame',frame)
             cv2.imshow('dst', dst)
 
             k = cv2.waitKey(1) & 0xFF
@@ -111,6 +100,8 @@ def main():
 
         else:
             break
+        
+        last_t = clock()
 
     cv2.destroyAllWindows()
     capture.release()

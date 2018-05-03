@@ -13,7 +13,7 @@ class Path(object):
 
 		self.pos_y = pos_y
 
-	def falling_point(self, window, h_limit=0, precision=0.01):
+	def falling_point(self, window, x_0=0, h_limit=0, precision=0.01):
 		"""
 		Returns the x value of the falling point (when y == h_limit) or None
 		if it does no fall within the view of the camera
@@ -23,7 +23,7 @@ class Path(object):
 		justified)
 		"""
 
-		left, right = 0, window['width']
+		left, right = x_0, window['width']
 		middle = (left + right) / 2
 
 		while abs(right - left) >= precision:

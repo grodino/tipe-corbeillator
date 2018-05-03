@@ -14,6 +14,7 @@ from tests.utils import response_time
 from config.environment import RealWorld
 from tracking.ball import Ball
 from tracking.path import Path
+from tracking.ball import display_info
 from physics.models import free_fall
 from actuators.motor import Motor
 
@@ -43,83 +44,87 @@ def main(source, port, real_world, debug):
 
     arduino_console = serial.Serial(port, 230400, timeout=0.01)
 
-    belt_motor = Motor(
+    motor = Motor(
         arduino_console,
         debug=debug
     )
     # avoids some bugs with serial
-    time.sleep(0.5)
+    time.sleep(3)
 
 
     ###########################
     #  CAMERA INITIALISATION  #
     ###########################
 
-    WHITE_LOWER = (240, 240, 240)
-    WHITE_UPPER = (255, 255, 255)
 
-    ORANGE_LOWER = (255, 122, 0)
-    ORANGE_UPPER = (255, 200, 0)
-
-    upper = array([x + 20 for x in real_world.object_color])
-    lower = array([x - 20 for x in real_world.object_color])
-
-    ball = Ball(source, (lower, upper), max_retries=1000, debug=debug)
+    color_range = real_world.color_range
+    ball = Ball(source, real_world.color_range, max_retries=100, debug=debug)
     ball.start_positionning()
+    
     rail_origin = real_world.dist_origin_rails
+    px_m_ratio = real_world.px_m_ratio
+    inc_m_ratio = real_world.inc_m_ratio
 
 
     ###################
     #  BALL TRACKING  #
     ###################
-    
     i = 0
     positions = []
     models = []
     x_falls = []
 
+    t = time.clock()
+    bgr = cv2.cvtColor(ball._last_frame, cv2.COLOR_RGB2BGR)
+
     # Wait for the ball to appear
     while not ball.is_in_range:
+        dt = time.clock() - t
+        t = time.clock()
+
+        bgr = cv2.cvtColor(ball._last_frame, cv2.COLOR_RGB2BGR)
+        display_info(bgr, str(1/dt), color_range)
+
+        cv2.imshow('camera', bgr)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-
-    print("BALL FOUND")
-
-    # Get the first position (to compute initial speed)
-    while not ball.is_in_range:
-        pass
 
     positions.append(ball.position)
 
     while ball.is_in_range:
+        dt = time.clock() - t
+        t = time.clock()
+
         positions.append(ball.position)
 
-        # Create the functions describing the position of the
-        # ball with x axis
         f = free_fall(
             [positions[-1], positions[-2]],
             real_world.px_m_ratio
         )
+
         models.append(f)
         path = Path(f)
 
-        x_fall = path.falling_point(ball.window)
+        x_fall = path.falling_point(ball.window, ball.window['width']//2)
         x_falls.append((x_fall, time.clock()))
-        
-        t = time.clock()
 
-        success = False
-        while not success:
-            try:
-                belt_motor.position = int((x_fall/real_world.px_m_ratio)*real_world.encoder_ratio*1000)
-                success = True
-            except:
-                success = False
-                
-        print('WROTE IN ', time.clock() - t)
+        motor.position = int((inc_m_ratio/px_m_ratio)*(rail_origin - x_fall))
+        
+        frame = ball._last_frame
+        bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        fps = str(1/dt)
+        
+        display_info(bgr, fps, color_range)
+
+        cv2.imshow('camera', bgr)
+        cv2.imshow('mask', ball._mask)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+    height = len(bgr)
+    width = len(bgr[0])
 
 
     ##########################
@@ -194,19 +199,31 @@ def config_distances(source, port, real_world, debug):
     w = float(input('width (m) : '))
     h = float(input('height (m) : '))
 
+    cv2.namedWindow('CONFIG')
+
+    center = [0, 0]
+    def mouse_callback(event, x, y, flags, param):
+
+        if event == cv2.EVENT_LBUTTONUP:
+            center[0], center[1] = x, y
+
+    cv2.setMouseCallback('CONFIG', mouse_callback)
+
     while 1:
         ret, frame = capture.read()
 
         cv2.putText(
             frame, 
-            'Place the reference paper behind the center then press the d key',
+            'Click on object then press d key',
             (0, 20),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 3
+            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 1
         )
-        height = len(frame)
-        width = len(frame[0])
-        cv2.circle(frame, (width//2, height//2), 3, (0, 255, 0))
-
+        cv2.circle(
+            frame, 
+            tuple(center), 
+            3, 
+            (255, 0, 255)
+        )
         cv2.imshow('CONFIG', frame)
 
         if cv2.waitKey(1) & 0xFF == ord('d'):
@@ -215,7 +232,7 @@ def config_distances(source, port, real_world, debug):
     ret, frame = capture.read()
 
     img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    print(real_world.config_distances(img, w, h), 'px/m')
+    print(real_world.config_distances(img, center, w, h), 'px/m')
     real_world.save()
 
 
@@ -280,12 +297,12 @@ def config_speed_pwm_ratio(source, port, real_world, debug):
     arduino_console = serial.Serial(port, 230400, timeout=1, write_timeout=2)
     motor = Motor(
         arduino_console,
-        debug=True
+        debug=debug
     )
     # avoids some bugs with serial
     time.sleep(1)
     
-    EXP_DURATION = 1.5 # s
+    EXP_DURATION = 1 # s
     SPEED_VALUE = 255 # pwm
 
     speeds = []
@@ -332,7 +349,7 @@ def config_inc_distance_ratio(source, port, real_world, debug):
     input()
     print()
 
-    arduino_console = serial.Serial('COM6', 230400, timeout=1, write_timeout=2)
+    arduino_console = serial.Serial(port, 230400, timeout=1, write_timeout=2)
     motor = Motor(
         arduino_console,
         debug=debug
@@ -360,7 +377,55 @@ def config_inc_distance_ratio(source, port, real_world, debug):
 
     real_world.inc_m_ratio = ratio
     real_world.save()
+    
 
+################################################################################
+#                       CONFIG RAILS TO ORIGIN DISTANCE                        #
+################################################################################
+def config_dist_rail_origin(source, port, real_world, debug):
+    """
+    Determines the distance between the origin of the camera and the origin of 
+    the rails
+    """
+
+    clear_cmd()
+    print('RAILS TO ORIGIN DISTANCE CONFIG')
+    capture = cv2.VideoCapture(source)
+    cv2.namedWindow('CONFIG')
+
+    center = [0, 0]
+    def mouse_callback(event, x, y, flags, param):
+
+        if event == cv2.EVENT_LBUTTONUP:
+            center[0], center[1] = x, y
+
+    cv2.setMouseCallback('CONFIG', mouse_callback)
+
+    while 1:
+        ret, frame = capture.read()
+
+        cv2.putText(
+            frame, 
+            'Click on rail origin then press d key',
+            (0, 20),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 1
+        )
+        cv2.circle(
+            frame, 
+            tuple(center), 
+            3, 
+            (255, 0, 255)
+        )
+        cv2.imshow('CONFIG', frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('d'):
+            break
+
+    ret, frame = capture.read()
+
+    print('CENTER ', center[0])
+    real_world.dist_origin_rails = center[0]
+    real_world.save()
 
 ################################################################################
 #                              CLI INTERFACE                                   #
@@ -407,6 +472,11 @@ if __name__ == '__main__':
         action='store_true'
     )
     parser.add_argument(
+        '--config-rails-origin',
+        help='Enter the rail origin - camera origin distance config',
+        action='store_true'
+    )
+    parser.add_argument(
         '--debug',
         help='Switch debug mode on /!\\ Verbose /!\\',
         action='store_true'
@@ -442,6 +512,9 @@ if __name__ == '__main__':
 
     if args.config_inc_distance_ratio:
         config_inc_distance_ratio(source, port, real_world, debug)
+
+    if args.config_rails_origin:
+        config_dist_rail_origin(source, port, real_world, debug)
     
     if args.mode in ['run', 'R']:
         main(source, port, real_world, debug)
