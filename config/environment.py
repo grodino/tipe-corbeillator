@@ -1,3 +1,4 @@
+import os
 import json
 
 import cv2
@@ -10,8 +11,19 @@ class RealWorld(object):
     Reads, computes and manages config vars
     """
 
+    _keys: list
+    _config_data: dict
+    _config_file_path: str
+    _base_dir: str
+
     def __init__(self):
-        with open('config/config.json') as file:
+        self._base_dir = os.getcwd()
+        self._config_file_path = os.path.join(
+            self._base_dir, 
+            'config/config.json'
+        )
+
+        with open(self._config_file_path) as file:
             self._config_data = json.load(file)
         
         self._keys = [var["name"] for var in self._config_data]

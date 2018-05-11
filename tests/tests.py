@@ -192,7 +192,7 @@ def open_loop_step_input(source, port, real_world, debug):
     motor.speed = 0
     
     experiment.add_data(
-        ['entree_echellon'],
+        ['entree_echelon'],
         {
             'name': 'Réponse temporelle du système en boucle ouverte à une entrée en echellon',
             'speed_order': SPEED_VALUE,
@@ -203,6 +203,58 @@ def open_loop_step_input(source, port, real_world, debug):
     )
     experiment.save()
         
+
+################################################################################
+#                       CLOSED LOOP POSITION STEP INPUT                        #
+################################################################################
+def closed_loop_pos_step_input(source, port, real_world, debug):
+    arduino_console = serial.Serial(port, 230400, timeout=1, write_timeout=2)
+    experiment = Experiment.new(real_world.data_folder)
+
+    motor = Motor(
+        arduino_console,
+        debug=debug
+    )
+    # avoids some bugs with serial
+    time.sleep(1)
+    context = ask_context()
+    experiment.add_data(['context'], context)
+
+    EXP_DURATION = 3 # s
+    POS_VALUE = int((real_world.rail_length/2)*real_world.inc_m_ratio) # inc
+
+    positions = []
+    speeds = []
+    times = []
+
+    t_start = time.clock()
+    t = t_start
+
+    while t - t_start < EXP_DURATION:
+        motor.position = POS_VALUE
+        times.append(t - t_start)
+        positions.append(motor.position)
+        speeds.append(motor.speed)
+        t = time.clock()
+    
+    motor.speed = 0
+    
+    experiment.add_data(
+        ['entree_echellon'],
+        {
+            'name': 'Réponse temporelle du système en boucle fermée à une entrée en echelon de position',
+            'pos_order': POS_VALUE,
+            'times': times,
+            'speeds': speeds,
+            'positions': positions
+        }
+    )
+    experiment.save()
+
+    pl.plot(times, positions)
+    pl.legend(['position'])
+    pl.show()
+
 
 ################################################################################
 #                            TRACKING TIME TEST                                #
@@ -442,17 +494,34 @@ def bode_data_analysis(source, port, real_world, debug):
 ################################################################################
 def step_input_data_analysis(source, port, real_world, debug):
     exp_id = int(input('EXPERIMENT ID : '))
-    experiment = Experiment.from_id(17, real_world.data_folder)
-    
-    speed_order = experiment.data['entree_echellon']['speed_order']
-    times = experiment.data['entree_echellon']['times']
-    speeds = experiment.data['entree_echellon']['speeds']
-    positions = experiment.data['entree_echellon']['positions']
+    experiment = Experiment.from_id(exp_id, real_world.data_folder)
 
-    response_t, lower, upper = response_time(times, speeds)
+    EXP_TYPES = ['POSITION', 'SPEED']
+    EXP_TYPES_TO_FR = {'POSITION': 'position', 'SPEED': 'vitesse'}
+
+    print('Experiment types : ')
+    for i, exp_type in enumerate(EXP_TYPES):
+        print('\t [{}] {}'.format(i, exp_type))
+    
+    exp_type = EXP_TYPES[int(input('Choose the type : '))]
+    
+    if exp_type == 'SPEED':
+        order = experiment.data['entree_echelon']['speed_order']
+    else:
+        order = experiment.data['entree_echelon']['pos_order']
+    times = experiment.data['entree_echelon']['times']
+    speeds = experiment.data['entree_echelon']['speeds']
+    positions = experiment.data['entree_echelon']['positions']
+
+    if exp_type == 'SPEED':
+        response_t, lower, upper = response_time(times, speeds)
+    else:
+        response_t, lower, upper = response_time(times, positions)
 
     fig, ax1 = pl.subplots()
-    pl.title('Réponse à un échellon de vitesse')
+    pl.title('Réponse à un échellon de {}'.format(
+        EXP_TYPES_TO_FR[exp_type]
+    ))
     
     ax1.plot(times, positions, color='red')
     ax1.set_ylabel('position (inc)')
@@ -474,6 +543,7 @@ def step_input_data_analysis(source, port, real_world, debug):
 TESTS_LIST = [
     open_loop_sine_input,
     open_loop_step_input,
+    closed_loop_pos_step_input,
     tracking_time_test,
     trajectory_anticipation_test,
     bode_data_analysis,

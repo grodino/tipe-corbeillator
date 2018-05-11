@@ -1,0 +1,54 @@
+[
+    {
+        "name": "data_folder",
+        "unit": "None",
+        "description": "path to the data folder used to store experiments",
+        "value": "data/"
+    },
+    {
+        "name": "object_color",
+        "unit": "RGB",
+        "description": "Color of the followed object",
+        "value": [
+            202,
+            78,
+            42
+        ]
+    },
+    {
+        "name": "rail_length",
+        "unit": "m",
+        "description": "Distance between the center of the basket in its two extreme positions",
+        "value": 0.527
+    },
+    {
+        "name": "dist_origin_rails",
+        "unit": "px",
+        "description": "Distance between the origin of the camera window and the origin of the rails",
+        "value": 632
+    },
+    {
+        "name": "motor_max_acceleration",
+        "unit": "rad/s\u00c2\u00b2",
+        "description": "Maximum angular acceleration of the motor",
+        "value": 100
+    },
+    {
+        "name": "px_m_ratio",
+        "unit": "px/m",
+        "description": "Number of pixels per meter",
+        "value": 336.26868195476004
+    },
+    {
+        "name": "inc_m_ratio",
+        "unit": "inc/m",
+        "description": "Number of coder increments per translation meter of the basket",
+        "value": 64483.87096774193
+    },
+    {
+        "name": "pwm_incs_ratio",
+        "unit": "pwm/(inc/s)",
+        "description": "PWM value relative to speed in inc per second",
+        "value": 8.80701245415173
+    }
+]

@@ -1,7 +1,10 @@
 import json
+import shutil
 from datetime import datetime
 
 from path import Path
+
+from config.environment import RealWorld
 
 
 class Experiment(object):
@@ -164,6 +167,12 @@ class Experiment(object):
                     file, 
                     indent=4
                 )
+        
+        real_world = RealWorld()
+        shutil.copy(
+            real_world._config_file_path, 
+            Path.joinpath(real_world._base_dir, self._dir_path)
+        )
 
 
 def main():
