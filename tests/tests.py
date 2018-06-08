@@ -1,12 +1,15 @@
 import time
+from math import pi
 
 import serial
 import numpy as np
+from scipy.optimize import curve_fit
 from matplotlib import pyplot as pl
 
 from tracking.path import Path
 from tracking.ball import Ball, display_info
 
+from tests.utils import phase
 from tests.utils import amplitude
 from tests.utils import constraint
 from tests.utils import sample_time
@@ -35,14 +38,14 @@ def open_loop_sine_input(source, port, real_world, debug):
     context = ask_context()
     experiment.add_data(['context'], context)
     print('Move the basket next to the motor (the origin)')
-    input('Ready ?')
+    basket = int(input('Basket mounted ? 0: No, 1: Yes '))
 
     ############
     # MEASURES #
     ############
     START_FREQ = 0.05 # Hz
     END_FREQ = 50 # Hz
-    NB_POINTS = 15
+    NB_POINTS = 25
 
     SINE_AMPLITUDE = 200 # pwm
     EXP_DURATION = 15 # s
@@ -50,7 +53,8 @@ def open_loop_sine_input(source, port, real_world, debug):
         (real_world.rail_length/2)*real_world.inc_m_ratio
     )# inc
 
-    motor.position = CENTER
+    if basket:
+        motor.position = CENTER
     time.sleep(2)
 
     exp_freqs = np.geomspace(
@@ -61,7 +65,8 @@ def open_loop_sine_input(source, port, real_world, debug):
     results = []
 
     for sine_freq in exp_freqs:
-        motor.position = CENTER
+        if basket:
+            motor.position = CENTER
         time.sleep(5)
         sine_freq += 0.1
 
@@ -74,17 +79,28 @@ def open_loop_sine_input(source, port, real_world, debug):
         t = t_start
         
         while t - t_start < EXP_DURATION:
+            try:
+                speed_measures.append(motor.speed)
+            except:
+                t = time.clock()
+                continue
+            
+            try:
+                pos_measures.append(motor.position)
+            except:
+                speed_measures.pop()
+                t = time.clock()
+                continue
+            
             times.append(t - t_start)
-            speed_measures.append(motor.speed)
-            pos_measures.append(motor.position)
 
             order = int(SINE_AMPLITUDE*np.sin(2*np.pi*sine_freq*(t - t_start)))
 
             # limit the amplitude of the movement
-            if pos_measures[-1] <= 1500 and order <= 0:
+            if basket and (pos_measures[-1] <= 1500 and order <= 0):
                 motor.speed = 0
                 consignes.append(0)
-            elif pos_measures[-1] >= 2*CENTER - 1500 and order >= 0:
+            elif basket and (pos_measures[-1] >= 2*CENTER - 1500 and order >= 0):
                 motor.speed = 0
                 consignes.append(0)
             else:
@@ -194,7 +210,7 @@ def open_loop_step_input(source, port, real_world, debug):
     experiment.add_data(
         ['entree_echelon'],
         {
-            'name': 'Réponse temporelle du système en boucle ouverte à une entrée en echellon',
+            'name': 'Réponse temporelle du système en boucle ouverte à une entrée en echelon',
             'speed_order': SPEED_VALUE,
             'times': times,
             'speeds': speeds,
@@ -240,7 +256,7 @@ def closed_loop_pos_step_input(source, port, real_world, debug):
     motor.speed = 0
     
     experiment.add_data(
-        ['entree_echellon'],
+        ['entree_echelon'],
         {
             'name': 'Réponse temporelle du système en boucle fermée à une entrée en echelon de position',
             'pos_order': POS_VALUE,
@@ -319,10 +335,12 @@ def trajectory_anticipation_test(source, port, real_world, debug):
     color_range = real_world.color_range
 
     ball = Ball(source, color_range, max_retries=100, debug=debug)
+    experiment = Experiment.new(real_world.data_folder)
 
     ball.start_positionning()
     i = 0
     positions = []
+    times  =[]
     models = []
     x_falls = []
 
@@ -352,12 +370,14 @@ def trajectory_anticipation_test(source, port, real_world, debug):
             return
 
     positions.append(ball.position)
+    times.append(t)
 
     while ball.is_in_range:
         dt = time.clock() - t
         t = time.clock()
 
         positions.append(ball.position)
+        times.append(t)
 
         f = free_fall(
             [positions[-1], positions[-2]],
@@ -386,8 +406,8 @@ def trajectory_anticipation_test(source, port, real_world, debug):
     for i, x_fall in enumerate(x_falls):
         cv2.circle(
             bgr, 
-            (int(x_fall[0]), height//2), 
-            3, 
+            (int(x_fall[0]), height-1), 
+            5, 
             (int((i/len(x_falls))*255), 0, 0)
         )
 
@@ -418,6 +438,28 @@ def trajectory_anticipation_test(source, port, real_world, debug):
 
     print("Number of positions:", len(positions))
     print(positions)
+
+    experiment.add_data(
+        ['trajectory_anticipation_test'],
+        {
+            'name': 'Anticipation de la trajectoire de la balle par l\'algorithme de suivi',
+            'times': times,
+            'positions': positions,
+            'x_falls': x_falls
+        }
+    )
+    experiment.save()
+
+    x_falls = np.array(x_falls)
+    print()
+    print(x_falls[:,1])
+    print(x_falls[:,0]/real_world.px_m_ratio)
+
+    pl.plot(x_falls[:,1], x_falls[:,0]/real_world.px_m_ratio)
+    pl.title('Abscisse du point de chute de la balle en fonction du temps')
+    pl.ylabel('Xchute (m)')
+    pl.xlabel('temps (s)')
+    pl.show()
         
     # positions = np.array(positions)
     # X = positions[:,0]
@@ -447,6 +489,7 @@ def bode_data_analysis(source, port, real_world, debug):
     experiment = Experiment.from_id(exp_id, real_world.data_folder)
     n_experiments = len(experiment.data['entree_sinus']['measures'])
     amplitudes = []
+    phases = []
     freqs = []
     
     # fig, axes = pl.subplots(n_experiments)
@@ -454,13 +497,16 @@ def bode_data_analysis(source, port, real_world, debug):
     for i in range(n_experiments):
         pos_measures = np.array(
             list(map(float, experiment.data['entree_sinus']['measures'][i]['pos_measures']))
-        )
+        )[30:]
         speed_measures = np.array(
             list(map(float, experiment.data['entree_sinus']['measures'][i]['speed_measures']))
-        )
+        )[30:]
+        speed_orders = np.array(
+            list(map(float, experiment.data['entree_sinus']['measures'][i]['speed_orders']))
+        )[30:]
         times = np.array(
             list(map(float, experiment.data['entree_sinus']['measures'][i]['times']))
-        )
+        )[30:]
         order_freq = float(experiment.data['entree_sinus']['measures'][i]['order_freq'])
         order_amplitude = float(experiment.data['entree_sinus']['measures'][i]['order_amplitude'])
 
@@ -469,23 +515,66 @@ def bode_data_analysis(source, port, real_world, debug):
         freq_range = np.fft.rfftfreq(times.size, sample_time(times))
 
         amplitudes.append(amplitude(
-            times, 
+            times,
             speed_measures, 
             1/order_freq
         ))
+        # phases.append(phase(
+        #     times,
+        #     speed_measures,
+        #     speed_orders,
+        #     1/order_freq
+        # ))
         freqs.append(order_freq)
 
     freqs = np.array(freqs)
-    amplitudes = np.array(amplitudes)*real_world.pwm_incs_ratio # convert in pwm
+    amplitudes = np.array(amplitudes)/(order_amplitude/real_world.pwm_incs_ratio) # convert in pwm
+    #phases = np.array(phases)
 
+    j = complex(0, 1)
+
+    def func(f, K, xi, f0):
+        return np.abs(K/(1 + (2*xi)*j*(f/f0) - (f/f0)**2))
+    
+    (K, xi, f0), pcov = curve_fit(func, freqs, amplitudes, bounds=([0, 0.6, 1], [np.inf, np.inf, 10]))
+    print(K, xi, f0)
+    print(np.sqrt(np.diag(pcov)))
+
+    #pl.subplot('211')
     pl.title('Gain en vitesse de la corbeille en fonction de la fréquence')
     pl.semilogx(
         freqs,
-        20*np.log10(amplitudes/order_amplitude)
+        20*np.log10(amplitudes)
     )
+    pl.semilogx(
+        np.geomspace(freqs[0], freqs[-1], 500),
+        20*np.log10([func(freq, K, xi, f0) for freq in np.geomspace(freqs[0], freqs[-1], 500)])
+    )
+    pl.legend(['Expérience', 'Régression'])
+    
     pl.xlabel('Fréquence (Hz)')
     pl.ylabel('Gain (dB)')
     pl.grid(True, color='0.7', linestyle='-', which='both', axis='both')
+
+    precision = 3
+    text = ' K = {} \n Xi = {}\n F0 = {}'.format(
+        round(K, precision), round(xi, precision), round(f0, precision)
+    )
+
+    pl.text(
+        2*10**(-1), -20, 
+        text,
+        color='white',
+        fontsize=12,
+        bbox=dict(facecolor='black', edgecolor='black', pad=10.0)
+    )
+
+    # pl.subplot('212')
+    # pl.title('Phase en vitesse de la corbeille en fonction de la fréquence')
+    # pl.semilogx(
+    #     freqs,
+    #     phases*(180/pi)
+    # )
     pl.show()
 
 
@@ -513,30 +602,53 @@ def step_input_data_analysis(source, port, real_world, debug):
     speeds = experiment.data['entree_echelon']['speeds']
     positions = experiment.data['entree_echelon']['positions']
 
+    print('{} points, {} seconds, {} point/s'.format(
+        len(times), 
+        times[len(times) - 1],
+        len(times)/times[len(times) - 1]
+    ))
+    end = int(input('Last point to display : '))
+
+    times = times[:end].copy()
+    speeds = speeds[:end].copy()
+    positions = positions[:end].copy()
+
     if exp_type == 'SPEED':
         response_t, lower, upper = response_time(times, speeds)
     else:
         response_t, lower, upper = response_time(times, positions)
 
     fig, ax1 = pl.subplots()
-    pl.title('Réponse à un échellon de {}'.format(
+    pl.title('Réponse à un échelon de {}'.format(
         EXP_TYPES_TO_FR[exp_type]
     ))
     
     ax1.plot(times, positions, color='red')
     ax1.set_ylabel('position (inc)')
+    ax1.legend(['position'], loc=1)
+
+    if exp_type == 'POSITION':
+        ax1.axhline(y=lower, color='0.7', linestyle='--', linewidth=1)
+        ax1.axhline(y=upper, color='0.7', linestyle='--', linewidth=1)
+        ax1.text(0, upper, '$' + str(upper)[:4] + ' +5\%$')
+        ax1.text(0, lower, '$' + str(lower)[:4] + ' -5\%$')
+        
+        ax1.axvline(x=response_t, color='0.7', linestyle='--', linewidth=1)
+        ax1.text(response_t, 0, '$t_{5\%}= '+ str(response_t)[:5]+' s$')
 
     ax2 = ax1.twinx()
     ax2.plot(times, speeds, color='blue')
     ax2.set_ylabel('vitesse (inc/s)')
+    ax2.legend(['vitesse'], loc=2)
 
-    ax2.axhline(y=lower, color='0.7', linestyle='--', linewidth=1)
-    ax2.axhline(y=upper, color='0.7', linestyle='--', linewidth=1)
-    ax2.text(0, upper, '$' + str(upper)[:4] + ' +5\%$')
-    ax2.text(0, lower, '$' + str(lower)[:4] + ' -5\%$')
-    
-    ax2.axvline(x=response_t, color='0.7', linestyle='--', linewidth=1)
-    ax2.text(response_t, 0, '$t_{5\%}= '+ str(response_t)[:3]+' s$')
+    if exp_type == 'SPEED':
+        ax2.axhline(y=lower, color='0.7', linestyle='--', linewidth=1)
+        ax2.axhline(y=upper, color='0.7', linestyle='--', linewidth=1)
+        ax2.text(0, upper, '$' + str(upper)[:4] + ' +5\%$')
+        ax2.text(0, lower, '$' + str(lower)[:4] + ' -5\%$')
+        
+        ax2.axvline(x=response_t, color='0.7', linestyle='--', linewidth=1)
+        ax2.text(response_t, 0, '$t_{5\%}= '+ str(response_t)[:5]+' s$')
 
     pl.show()
 

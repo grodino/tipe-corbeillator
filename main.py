@@ -77,18 +77,23 @@ def main(source, port, real_world, debug):
     t = time.clock()
     bgr = cv2.cvtColor(ball._last_frame, cv2.COLOR_RGB2BGR)
 
+    #fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+    #out = cv2.VideoWriter('test.mp4', fourcc, 20.0, (len(bgr), len(bgr[0])))
+
     # Wait for the ball to appear
     while not ball.is_in_range:
         dt = time.clock() - t
         t = time.clock()
 
         bgr = cv2.cvtColor(ball._last_frame, cv2.COLOR_RGB2BGR)
+        #out.write(ball._last_frame)
         display_info(bgr, str(1/dt), color_range)
 
         cv2.imshow('camera', bgr)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+    #out.release()
     positions.append(ball.position)
 
     while ball.is_in_range:
@@ -108,7 +113,11 @@ def main(source, port, real_world, debug):
         x_fall = path.falling_point(ball.window, ball.window['width']//2)
         x_falls.append((x_fall, time.clock()))
 
-        motor.position = int((inc_m_ratio/px_m_ratio)*(rail_origin - x_fall))
+        if rail_origin - x_fall >= 0:
+            motor.position = int((inc_m_ratio/px_m_ratio)*(rail_origin - x_fall))
+            print('FOUND')
+        else:
+            print('NO')
         
         frame = ball._last_frame
         bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)

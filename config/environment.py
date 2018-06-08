@@ -140,6 +140,9 @@ class RealWorld(object):
         cv2.imshow('mask', mask)
 
         while 1:
+            cv2.imshow('Shape Detection', image)
+            cv2.imshow('mask', mask)
+
             # WARNING ! DO NOT DELETE
             if cv2.waitKey(1) & 0xFF == ord('d'):
                 break

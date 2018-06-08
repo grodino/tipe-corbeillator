@@ -1,0 +1,5 @@
+{
+    "voltage": 22.0,
+    "basket_mounted": true,
+    "remarks": "Remise de T ech = 6s et T pid = 4s, Kp = 2, Ki = 0, Kd = 1"
+}

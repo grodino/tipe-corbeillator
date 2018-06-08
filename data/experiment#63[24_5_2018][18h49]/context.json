@@ -1,5 +1,5 @@
 {
     "voltage": 22.0,
     "basket_mounted": true,
-    "remarks": ""
+    "remarks": "Kp = 1.7, Ki=Kd=0"
 }

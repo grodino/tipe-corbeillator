@@ -28,7 +28,7 @@ class Path(object):
 
 		while abs(right - left) >= precision:
 
-			if self.pos_y(left)*self.pos_y(middle) < h_limit:
+			if (self.pos_y(left) - h_limit)*(self.pos_y(middle) - h_limit) < 0:
 				right = middle
 			else:
 				left = middle

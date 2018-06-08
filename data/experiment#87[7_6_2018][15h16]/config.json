@@ -10,9 +10,9 @@
         "unit": "RGB",
         "description": "Color of the followed object",
         "value": [
-            184,
-            67,
-            32
+            133,
+            45,
+            22
         ]
     },
     {
@@ -25,7 +25,7 @@
         "name": "dist_origin_rails",
         "unit": "px",
         "description": "Distance between the origin of the camera window and the origin of the rails",
-        "value": 499
+        "value": 6
     },
     {
         "name": "motor_max_acceleration",
@@ -37,7 +37,7 @@
         "name": "px_m_ratio",
         "unit": "px/m",
         "description": "Number of pixels per meter",
-        "value": 273.7068965517242
+        "value": 237.55387931034483
     },
     {
         "name": "inc_m_ratio",
